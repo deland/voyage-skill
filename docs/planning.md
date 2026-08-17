@@ -1016,3 +1016,22 @@ active → retired | superseded
 - Readback: only negative tests and planning text retain `commit:abc`; Git validator requires exact repository root and full readable SHA; artifact/command facts are recomputed; expired runtime is unknown; User scope and revocation are live-read; accept/close revalidate the current path
 - Remaining issues: official `quick_validate.py` remains unknown because its external environment lacks PyYAML and approval infrastructure previously returned 403; equivalent repository schema/frontmatter tests pass
 - Next safe action: commit the MK-102 implementation, rerun all 139 tests and dogfood gates against the immutable commit, append DEV-0003 CLOSE with its SHA, then commit and push the close record before MK-103
+
+---
+
+## 2026-08-17 · DEV-0003 · MK-102 · CLOSE
+
+- Status: complete
+- Baseline: `73b460d45d5554c127016c2022db6814e7a01d54`
+- Anchor: `59997f57a3a7d8a3f5f9ef5aaa3fe1154c88d185`
+- Supersedes: none
+- Scope: typed anchors and evidence validation delivered through ST-1021 through ST-1031
+- Non-goals: unchanged; MK-103 state/schema convergence, MK-104 recovery classification, extensions, signatures, remote evidence, and plugin validators remain deferred
+- Risk: standard; accepted only after immutable-anchor readback
+- Dependencies: MK-000 and MK-101 complete; implementation anchor exists locally
+- Acceptance gates: full regression, compilation, dogfood validation/truth/recovery, schema and append-only contract tests, evidence CLI behavior, exact commit diff hygiene, and legacy-read compatibility
+- Actual result: PASS; immutable anchor rerun produced 139 passed, 0 failed, 0 skipped; compileall passed; dogfood validate returned no errors; truth status remained operational with six verified active sources; recover reported the same operational stage and ledger head; `git diff HEAD^ HEAD --check` passed
+- Tests: every DEV-0003 subtask captured tests before implementation; ST-1021 through ST-1031 and all prior tests pass against the exact anchor above
+- Readback: anchor contains 12 changed files, including the formal evidence schema and 530-line typed-evidence suite; no working-tree changes existed before this CLOSE append
+- Remaining issues: official `quick_validate.py` remains unknown due its external missing PyYAML/403 approval environment; repository-owned equivalent metadata, schema, and frontmatter checks pass
+- Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify remote head, then begin MK-103 with a new test-first START record
