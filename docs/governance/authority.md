@@ -61,10 +61,18 @@ selects the stricter mode.
 
 ## Rule lifecycle
 
-Rules move through `proposed`, `approved`, `applied`, `verified`, and `active`.
-They may then become `deprecated`, `retired`, or `superseded`. Failed
-verification requires revision or rollback. Every rule records its source,
-scope, cost, expected result, verifier, expiry/retirement condition, and rollback.
+<!-- rule-states:start -->
+Durable rule states are exactly `proposed`, `approved`, `applied`, `active`,
+`retired`, and `superseded`. `rule.verified` is the evidence event that moves an
+applied rule directly to active; it is not a separate durable state.
+
+`rule.verification-failed` keeps the rule applied but non-active and records the
+independent failure. Governance then uses `rule.rolled-back` to return it to
+approved before revision and reapplication.
+<!-- rule-states:end -->
+
+Every rule records its source, scope, cost, expected result, verifier,
+expiry/retirement condition, and rollback evidence.
 
 ## Audit blocks
 

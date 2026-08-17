@@ -1,3 +1,6 @@
+> Research input — non-authoritative and non-executable.
+> This document must not be used as project truth and must not be executed.
+
 # Graph Engineering 说明
 
 ## 1. 定义

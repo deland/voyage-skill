@@ -24,9 +24,13 @@ from .core import (
     recovery_snapshot,
     record_evidence,
     record_evidence_verification,
+    SUPPORTED_EVENT_TYPES,
     truth_status,
     validate_project,
 )
+
+
+CLI_EVENT_TYPES = frozenset(SUPPORTED_EVENT_TYPES)
 
 
 def emit(value: Any) -> None:
@@ -215,6 +219,15 @@ def build_parser() -> argparse.ArgumentParser:
     verify_rule.add_argument("rule_id")
     common_evidence(verify_rule)
     common_actor(verify_rule)
+    verify_fail = rule_sub.add_parser("verify-fail")
+    verify_fail.add_argument("rule_id")
+    verify_fail.add_argument("--reason", required=True)
+    common_evidence(verify_fail)
+    common_actor(verify_fail)
+    rollback = rule_sub.add_parser("rollback")
+    rollback.add_argument("rule_id")
+    common_evidence(rollback)
+    common_actor(rollback, loop="governance")
     retire = rule_sub.add_parser("retire")
     retire.add_argument("rule_id")
     common_evidence(retire)
@@ -229,7 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     event_sub = event.add_subparsers(dest="event_command", required=True)
     record = event_sub.add_parser("record")
     record.add_argument("--type", required=True, choices=[
-        "decision.recorded", "observation.recorded", "channel.sent",
+        "decision.recorded", "decision.revoked", "observation.recorded", "channel.sent",
         "channel.acknowledged", "channel.started", "environment.readback", "audit.finding",
     ])
     record.add_argument("--subject", required=True)
@@ -373,11 +386,14 @@ def handle_resource(paths, args) -> None:
             },
         )
     elif args.resource_command in {"release", "recover"}:
+        lease = current_state(paths)["leases"].get(args.lease_id)
+        if lease is None or not lease.get("active"):
+            raise VoyageError(f"active lease not found: {args.lease_id}")
         append_from_args(
             paths, args,
             event_type="resource.recovered" if args.resource_command == "recover" else "resource.released",
-            subject=args.lease_id,
-            payload={"lease_id": args.lease_id},
+            subject=lease["resource_id"],
+            payload={"resource_id": lease["resource_id"], "lease_id": args.lease_id},
         )
 
 
@@ -394,6 +410,10 @@ def handle_rule(paths, args) -> None:
         append_from_args(paths, args, event_type="rule.applied", subject=args.rule_id)
     elif command == "verify":
         append_from_args(paths, args, event_type="rule.verified", subject=args.rule_id)
+    elif command == "verify-fail":
+        append_from_args(paths, args, event_type="rule.verification-failed", subject=args.rule_id, payload={"reason": args.reason})
+    elif command == "rollback":
+        append_from_args(paths, args, event_type="rule.rolled-back", subject=args.rule_id)
     elif command == "retire":
         append_from_args(paths, args, event_type="rule.retired", subject=args.rule_id)
     elif command == "supersede":

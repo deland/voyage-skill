@@ -22,6 +22,55 @@ python3 <voyage-skill>/scripts/voyage.py --root <project> truth status
 python3 <voyage-skill>/scripts/voyage.py --root <project> recover
 ```
 
+## CLI command reference
+
+This marked section is generated from argparse. Run
+`python3 scripts/voyage-reference.py --check docs/operations/runbook.md` in CI;
+use `--print` to inspect or `--write` to update it after an intentional CLI
+change.
+
+<!-- voyage-cli-reference:start -->
+| Command |
+| --- |
+| `voyage event record` |
+| `voyage evidence record` |
+| `voyage evidence show` |
+| `voyage evidence verify` |
+| `voyage gate record` |
+| `voyage init` |
+| `voyage recover` |
+| `voyage resource claim` |
+| `voyage resource list` |
+| `voyage resource recover` |
+| `voyage resource register` |
+| `voyage resource release` |
+| `voyage rule apply` |
+| `voyage rule approve` |
+| `voyage rule propose` |
+| `voyage rule retire` |
+| `voyage rule rollback` |
+| `voyage rule supersede` |
+| `voyage rule verify` |
+| `voyage rule verify-fail` |
+| `voyage status` |
+| `voyage truth activate` |
+| `voyage truth list` |
+| `voyage truth migrate` |
+| `voyage truth status` |
+| `voyage validate` |
+| `voyage work accept` |
+| `voyage work authorize` |
+| `voyage work await-user` |
+| `voyage work block` |
+| `voyage work close` |
+| `voyage work create` |
+| `voyage work deliver` |
+| `voyage work quality` |
+| `voyage work resume` |
+| `voyage work start` |
+| `voyage work unblock` |
+<!-- voyage-cli-reference:end -->
+
 ## Bootstrap and truth activation
 
 `voyage init` creates a `bootstrap` project. Generated product, governance,

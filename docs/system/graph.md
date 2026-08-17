@@ -58,16 +58,23 @@ Runtime facts have three classes:
 Authoritative transitions require observed evidence where the gate demands it.
 Declaration/observation disagreement remains visible and creates conflict.
 
-The work lifecycle is:
+<!-- work-states:start -->
+Durable work states are exactly `draft`, `authorized`, `active`, `delivered`,
+`quality-passed`, `accepted`, and `closed`. Side states are exactly `rejected`,
+`blocked`, and `awaiting-user`.
 
-```text
-draft -> authorized -> ready -> active -> delivered
-      -> quality-passed -> accepted -> closed
-```
+The durable progression is draft → authorized → active → delivered →
+quality-passed → accepted → closed. Rejection returns to a new execution and
+delivery attempt. A block or User wait preserves the exact prior state and
+restores it only through its authorized resolution event.
+<!-- work-states:end -->
 
-Side states are `blocked`, `rejected`, `awaiting-user`, `canceled`, and
-`superseded`. Rejection returns to a new delivery attempt. `awaiting-user`
-cannot be bypassed by ordinary retries.
+<!-- rule-states:start -->
+Durable rule states are exactly `proposed`, `approved`, `applied`, `active`,
+`retired`, and `superseded`. A successful `rule.verified` event moves applied
+directly to active. `rule.verification-failed` leaves the durable state applied;
+`rule.rolled-back` returns it to approved for revision and reapplication.
+<!-- rule-states:end -->
 
 ## Ledger integrity
 

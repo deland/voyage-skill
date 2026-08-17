@@ -1,3 +1,6 @@
+> Research input — non-authoritative and non-executable.
+> This document must not be used as project truth and must not be executed.
+
 # Graph Engineering 四层回路组织方式
 
 ## 核心思想

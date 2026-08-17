@@ -1035,3 +1035,135 @@ active → retired | superseded
 - Readback: anchor contains 12 changed files, including the formal evidence schema and 530-line typed-evidence suite; no working-tree changes existed before this CLOSE append
 - Remaining issues: official `quick_validate.py` remains unknown due its external missing PyYAML/403 approval environment; repository-owned equivalent metadata, schema, and frontmatter checks pass
 - Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify remote head, then begin MK-103 with a new test-first START record
+
+---
+
+## 2026-08-18 · DEV-0004 · MK-103 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `bc68706b3167c393588d07f4fc9cdcf0c3449955`
+- Anchor: pending
+- Supersedes: none
+- Scope: converge work/rule lifecycle claims, add rule failure/rollback, generate and check authoritative CLI reference, remove Skill layout assumptions, align truth domains, normalize resource-event subjects, constrain event exchange schema, and label all research inputs non-authoritative/non-executable
+- Non-goals: no new speculative work state, no generalized rule revision graph, no MK-104 recovery classification, no plugin/profile architecture, no remote schema registry, and no cryptographic actor authentication
+- Risk: standard; this change removes unsupported promises and adds only the minimum rule failure path already required by active governance truth
+- Dependencies: MK-000 through MK-102 complete; D-0002 active
+- Acceptance gates: every test below is added before product changes and observed failing; each subtask passes its own tests plus cumulative convergence tests; final full regression, compileall, dogfood validate/truth/recover, CLI-reference checker, schema coverage, research-marker check, and diff hygiene pass
+- Actual result: pending
+- Tests: ST-1032 through ST-1038 defined below
+- Readback: local and remote branch both resolve to `bc68706b3167c393588d07f4fc9cdcf0c3449955`; worktree was clean at START
+- Remaining issues: active graph/governance/runbook/Skill claims currently drift from runtime and argparse
+- Next safe action: add the complete MK-103 convergence suite without product edits, capture the red baseline, then implement ST-1032 first
+
+### DEV-0004 固定收敛决策
+
+1. Work durable states are exactly `draft`, `authorized`, `active`, `delivered`, `quality-passed`, `accepted`, `closed`; side states are exactly `rejected`, `blocked`, `awaiting-user`.
+2. Work `ready`, `canceled`, and work `superseded` are absent from active v0.2 truth and next-action tables; truth-source/rule supersession remains valid in its own domain.
+3. Rule durable states are exactly `proposed`, `approved`, `applied`, `active`, `retired`, `superseded`; `rule.verified` transitions applied directly to active.
+4. `rule.verification-failed` leaves the durable state at applied and records failed verification metadata; `rule.rolled-back` requires that failure, governance authority, and evidence, then returns the rule to approved for revision/reapply.
+5. Resource lease events use resource ID as event subject and include both `resource_id` and `lease_id` in payload; registration remains resource-only.
+6. Authoritative CLI reference is derived deterministically from argparse leaf commands and checked between stable markers in the active runbook.
+7. Skill discovers active domain truth only through manifest and registry; repository-specific truth paths stay in the registry, not the stable Skill entry.
+
+### ST-1032 · Work 状态与 next action 收敛
+
+实现前测试用例：
+
+1. `work_state_contract_matches_exact_runtime_sets`：runtime 暴露的 durable/side 集合与 D-0002 完全一致。
+2. `system_graph_documents_only_reachable_work_states`：active graph 的 lifecycle/side states 与 runtime 集合一致，不含 ready/canceled/work superseded。
+3. `next_safe_action_covers_only_reachable_work_states`：next-action 表无不可达键，所有可达状态均有非 fallback 动作。
+4. `blocked_and_awaiting_user_restore_exact_previous_state`：两类暂停状态解除后恢复真实 previous state，不制造 ready 等中间态。
+
+### ST-1033 · Rule 失败验证与 rollback
+
+实现前测试用例：
+
+1. `rule_state_contract_matches_exact_runtime_sets`：durable rule 状态只包含 proposed/approved/applied/active/retired/superseded。
+2. `failed_rule_verification_remains_applied_and_records_failure`：独立 verifier 可失败规则，状态仍为 applied 且记录失败事件/actor。
+3. `rule_rollback_requires_failure_governance_and_evidence`：未失败、错误 loop 或无 evidence 均不能 rollback。
+4. `successful_rule_rollback_returns_to_approved_and_can_reapply`：rollback 后可治理修订/重新 apply/独立 verify 到 active。
+5. `rule_cli_exposes_verify_fail_and_rollback`：CLI 两条命令映射精确事件与权限。
+6. `governance_and_graph_document_only_real_rule_states_and_failure_path`：verified 是事件不是 durable state，deprecated 退出核心合同。
+
+### ST-1034 · Argparse 派生 CLI 参考
+
+实现前测试用例：
+
+1. `cli_reference_contains_every_leaf_command_exactly_once`：runbook 标记区覆盖 argparse 全部叶命令且无幽灵命令。
+2. `cli_reference_render_is_deterministic`：相同 parser 多次渲染字节一致。
+3. `cli_reference_check_detects_drift`：检查器对当前 runbook pass，对删改命令的副本 fail。
+4. `cli_reference_script_supports_check_and_print`：仓库脚本可供 CI 重复检查并打印生成内容。
+
+### ST-1035 · Skill 发现协议与领域一致性
+
+实现前测试用例：
+
+1. `skill_has_no_repository_specific_truth_paths`：Skill 不包含 `docs/product/...` 等固定布局，只要求 manifest/registry/domain 发现。
+2. `skill_names_the_same_required_domains_as_runtime`：Skill、init registry、dogfood registry 与 runtime 的四个必需领域一致。
+3. `custom_registry_paths_are_discoverable_without_skill_change`：采用任意项目内路径的 registry 后，truth status/Skill 协议仍可发现。
+4. `metadata_and_skill_identity_remain_consistent`：name、display name、default prompt 和 skill invocation 一致。
+
+### ST-1036 · Resource event subject 合同
+
+实现前测试用例：
+
+1. `claim_release_and_recover_use_resource_subject_with_both_ids`：三类 lease 事件 subject 均为 resource ID，payload 同时含 resource/lease ID。
+2. `resource_event_rejects_subject_or_payload_identity_mismatch`：subject、resource_id、lease 实际绑定不一致时拒绝。
+3. `resource_cli_resolves_resource_id_for_release_and_recovery`：仅输入 lease ID 的 CLI 会从真实状态解析 resource ID 后写事件。
+4. `event_data_validation_reports_legacy_ambiguous_resource_identity`：冷启动校验明确报告不一致而非依赖 subject 猜测。
+
+### ST-1037 · Runtime、Schema 与 CLI exchange 收敛
+
+实现前测试用例：
+
+1. `event_schema_enum_matches_runtime_supported_events`：event schema type enum 与 runtime 支持事件集合完全一致。
+2. `all_runtime_event_types_have_replay_coverage`：每个声明事件都有 replay 分支或明确通用观察分支。
+3. `all_cli_transition_events_are_in_runtime_and_schema`：CLI 产生的事件不超出 runtime/schema 合同。
+4. `new_rule_and_resource_events_validate_against_event_schema`：新增事件实例通过正式 schema，坏 type 被拒绝。
+
+### ST-1038 · Research 输入隔离与 dogfood
+
+实现前测试用例：
+
+1. `every_research_document_has_standard_non_authoritative_marker`：`docs/research/*` 每份文档都有统一 research-input 标识。
+2. `research_marker_explicitly_forbids_execution_and_truth_use`：标识同时写明 non-authoritative 与 non-executable。
+3. `dogfood_registry_keeps_research_non_authoritative`：registry 明确排除 research 目录。
+4. `dogfood_validate_recover_and_schema_coverage_remain_green`：收敛后仓库自身仍可冷启动且全部 schema 有测试实例。
+
+---
+
+## 2026-08-18 · DEV-0004 · MK-103 · UPDATE
+
+- Status: in-progress; red baseline captured
+- Baseline: `bc68706b3167c393588d07f4fc9cdcf0c3449955`
+- Anchor: pending
+- Supersedes: none
+- Scope: all ST-1032 through ST-1038 tests added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0004 START matrix
+- Acceptance gates: convergence suite must fail for the documented drift before implementation
+- Actual result: expected FAIL; 30 tests ran and exposed missing runtime state/event constants, unsupported rule failure/rollback, absent CLI reference module/script/markers, unconstrained event type schema, ambiguous resource release identity, hardcoded Skill truth paths, stale active lifecycle text, and missing research isolation markers; existing custom-registry/domain and dogfood compatibility checks passed
+- Tests: `PYTHONPATH=src python3 -B -m unittest tests.test_convergence -v`
+- Readback: failures map to the planned MK-103 gaps; one test-only lease-event count was corrected from three to four because the scenario intentionally creates two claims
+- Remaining issues: all ST-1032 through ST-1038 implementation work remains
+- Next safe action: implement ST-1032 runtime work-state constants, exact next-action map, and graph markers; run WorkStateConvergenceTests before proceeding
+
+---
+
+## 2026-08-18 · DEV-0004 · MK-103 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `bc68706b3167c393588d07f4fc9cdcf0c3449955`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-1032 through ST-1038 implemented; runtime, active truth, argparse reference, event schema, resource identity, Skill discovery, and research isolation now share one tested contract
+- Non-goals: unchanged; MK-104 recovery classification, optional extensions, signatures, remote evidence, and plugin validators remain deferred
+- Risk: standard; unsupported state promises were removed, required rule failure/rollback behavior was added, and all event producers now converge on the runtime/schema exchange contract
+- Dependencies: MK-000 through MK-102 complete; DEV-0004 START decisions and red baseline satisfied
+- Acceptance gates: 169-test full regression, compileall, dogfood validate/truth/recover, deterministic CLI-reference checker, exact runtime/schema/CLI event coverage, research-marker isolation, append-only planning enforcement, and diff hygiene
+- Actual result: PASS before commit; 169 passed, 0 failed, 0 skipped; compileall passed with cache under `/tmp`; dogfood validate returned no errors, truth status remained operational with six activation-verified active sources, recover remained operational at ledger head `evt-469b9c218d594ab0bd21c75dde697ca3`, CLI reference was current, and `git diff --check` passed
+- Tests: all 30 convergence tests pass after their recorded failing baseline; every ST-1032 through ST-1038 behavior is covered, and all 139 prior tests remain green
+- Readback: work durable/side states and rule durable states exactly match the fixed decisions; rule verification failure and rollback are executable; release/recover resolve the real resource subject; schema event enum equals runtime events; argparse generates the runbook reference; Skill discovery uses manifest and registry domains; all four research inputs retain their original content with only the non-authoritative/non-executable header added
+- Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned equivalent frontmatter, metadata, identity, schema, and invocation tests pass
+- Next safe action: commit the MK-103 implementation, rerun all 169 tests and acceptance gates against the immutable commit, append DEV-0004 CLOSE with its SHA, then commit and push the close record before MK-104

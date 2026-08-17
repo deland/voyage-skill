@@ -24,6 +24,32 @@ STATEFUL_RESOURCE_TYPES = {"account", "environment", "session", "window", "quota
 ALLOWED_RESOURCE_TYPES = {"file", "account", "port", "environment", "session", "window", "quota"}
 ALLOWED_RESOURCE_MODES = {"exclusive", "shared-read", "serialized", "rebuildable"}
 REQUIRED_TRUTH_DOMAINS = ("product", "governance", "system", "operations")
+WORK_DURABLE_STATES = ("draft", "authorized", "active", "delivered", "quality-passed", "accepted", "closed")
+WORK_SIDE_STATES = ("rejected", "blocked", "awaiting-user")
+RULE_DURABLE_STATES = ("proposed", "approved", "applied", "active", "retired", "superseded")
+SUPPORTED_EVENT_TYPES = frozenset({
+    "project.initialized", "truth.activated", "project.migrated", "evidence.verified",
+    "decision.recorded", "decision.revoked", "observation.recorded", "environment.readback",
+    "channel.sent", "channel.acknowledged", "channel.started", "audit.finding",
+    "work.created", "work.authorized", "work.started", "work.delivered",
+    "quality.passed", "quality.rejected", "gate.recorded", "work.accepted", "work.closed",
+    "work.blocked", "work.unblocked", "work.awaiting-user", "work.user-authorized",
+    "resource.registered", "resource.claimed", "resource.released", "resource.recovered",
+    "rule.proposed", "rule.approved", "rule.applied", "rule.verified",
+    "rule.verification-failed", "rule.rolled-back", "rule.superseded", "rule.retired",
+})
+NEXT_SAFE_ACTIONS = {
+    "draft": "governance authorization",
+    "authorized": "claim required resources and start execution",
+    "active": "produce evidence and immutable delivery anchor",
+    "delivered": "independent quality verdict on current anchor",
+    "quality-passed": "verify mandatory gates and accept",
+    "accepted": "release resources and close",
+    "closed": "none",
+    "rejected": "start a new execution attempt",
+    "blocked": "satisfy block conditions through an independent resolver",
+    "awaiting-user": "wait for scoped User decision",
+}
 EVIDENCE_KINDS = {"git-commit", "artifact-digest", "command-result", "runtime-readback", "user-decision"}
 EVIDENCE_ID_PATTERN = re.compile(r"^sha256:([a-f0-9]{64})$")
 EVIDENCE_VALIDATOR_VERSION = 1
@@ -629,6 +655,8 @@ def make_event(
         raise VoyageError(f"invalid loop: {loop}")
     if risk not in RISK_LEVELS:
         raise VoyageError(f"invalid risk: {risk}")
+    if event_type not in SUPPORTED_EVENT_TYPES:
+        raise VoyageError(f"unsupported event type: {event_type}")
     if not actor or not event_type or not subject:
         raise VoyageError("actor, event type, and subject are required")
     event = {
@@ -777,6 +805,15 @@ def _validate_event_data(events: list[dict[str, Any]]) -> list[str]:
                     parse_time(expires_at)
                 except (TypeError, ValueError):
                     errors.append(f"event {index} $.payload.expires_at: value is not a valid date-time")
+            if event.get("subject") != payload.get("resource_id"):
+                errors.append(f"event {index} subject must match $.payload.resource_id")
+        if event.get("type") in {"resource.released", "resource.recovered"}:
+            payload = event["payload"]
+            for key in ("resource_id", "lease_id"):
+                if not isinstance(payload.get(key), str) or not payload.get(key):
+                    errors.append(f"event {index} $.payload.{key}: required non-empty string is missing")
+            if event.get("subject") != payload.get("resource_id"):
+                errors.append(f"event {index} subject must match $.payload.resource_id")
     return errors
 
 
@@ -1116,7 +1153,7 @@ def replay_events(
         elif event_type == "work.blocked":
             _require(loop in {"quality", "governance", "audit"}, "work block requires quality, governance, or audit loop")
             work = _work(state, subject)
-            _require(work["status"] not in {"closed", "canceled", "blocked"}, f"work {subject} cannot be blocked from {work['status']}")
+            _require(work["status"] not in {"closed", "blocked"}, f"work {subject} cannot be blocked from {work['status']}")
             for key in ("reason", "scope", "unblock_condition", "appeal_to"):
                 _require(payload.get(key), f"block requires {key}")
             _require(bool(evidence), "block requires evidence")
@@ -1168,6 +1205,7 @@ def replay_events(
             resource_id = payload.get("resource_id")
             lease_id = payload.get("lease_id")
             _require(loop == "execution", "resource claim requires execution loop")
+            _require(subject == resource_id, "resource identity requires subject to match resource_id")
             _require(resource_id in resource_defs, f"unknown resource: {resource_id}")
             _require(lease_id and lease_id not in state["leases"], "resource claim requires a unique lease ID")
             _work(state, payload.get("work_id", ""))
@@ -1197,8 +1235,13 @@ def replay_events(
 
         elif event_type in {"resource.released", "resource.recovered"}:
             lease_id = payload.get("lease_id")
+            resource_id = payload.get("resource_id")
             lease = state["leases"].get(lease_id)
             _require(lease is not None and lease["active"], f"active lease not found: {lease_id}")
+            _require(
+                subject == resource_id == lease["resource_id"],
+                "resource identity requires subject, resource_id, and lease binding to match",
+            )
             _require(actor == lease["holder"] or loop in {"governance", "audit", "user"}, "only holder or control loop can release lease")
             if event_type == "resource.recovered":
                 _require(bool(evidence), "resource recovery requires probe evidence")
@@ -1210,7 +1253,16 @@ def replay_events(
             _require(subject not in state["rules"], f"rule already exists: {subject}")
             for key in ("scope", "source", "cost", "verification", "retirement"):
                 _require(payload.get(key), f"rule proposal requires {key}")
-            state["rules"][subject] = {"status": "proposed", "proposer": actor, "approver": None, "applier": None, "verifier": None}
+            state["rules"][subject] = {
+                "status": "proposed",
+                "proposer": actor,
+                "approver": None,
+                "applier": None,
+                "verifier": None,
+                "verification_status": None,
+                "verification_event": None,
+                "rollback_event": None,
+            }
 
         elif event_type == "rule.approved":
             _require(loop in {"governance", "user"}, "rule approval requires governance or User loop")
@@ -1224,7 +1276,7 @@ def replay_events(
             rule = state["rules"].get(subject)
             _require(rule and rule["status"] == "approved", f"rule {subject} is not approved")
             _require(bool(evidence), "rule application requires evidence")
-            rule.update(status="applied", applier=actor)
+            rule.update(status="applied", applier=actor, verifier=None, verification_status="pending", verification_event=None)
 
         elif event_type == "rule.verified":
             _require(loop in {"quality", "audit"}, "rule verification requires quality or audit loop")
@@ -1232,7 +1284,36 @@ def replay_events(
             _require(rule and rule["status"] == "applied", f"rule {subject} is not applied")
             _require(actor != rule["applier"], "rule applier cannot verify effectiveness")
             _require(bool(evidence), "rule verification requires evidence")
-            rule.update(status="active", verifier=actor)
+            rule.update(status="active", verifier=actor, verification_status="passed", verification_event=event["event_id"])
+
+        elif event_type == "rule.verification-failed":
+            _require(loop in {"quality", "audit"}, "rule verification failure requires quality or audit loop")
+            rule = state["rules"].get(subject)
+            _require(rule and rule["status"] == "applied", f"rule {subject} is not applied")
+            _require(actor != rule["applier"], "rule applier cannot verify effectiveness")
+            _require(bool(evidence), "rule verification failure requires evidence")
+            _require(payload.get("reason"), "rule verification failure requires reason")
+            rule.update(
+                verifier=actor,
+                verification_status="failed",
+                verification_event=event["event_id"],
+                verification_reason=payload["reason"],
+            )
+
+        elif event_type == "rule.rolled-back":
+            _require(loop == "governance", "rule rollback requires governance loop")
+            rule = state["rules"].get(subject)
+            _require(
+                rule and rule["status"] == "applied" and rule.get("verification_status") == "failed",
+                f"rule {subject} rollback requires failed verification",
+            )
+            _require(bool(evidence), "rule rollback requires evidence")
+            rule.update(
+                status="approved",
+                applier=None,
+                verification_status="rolled-back",
+                rollback_event=event["event_id"],
+            )
 
         elif event_type == "rule.superseded":
             _require(loop in {"governance", "user"}, "rule supersession requires governance or User loop")
@@ -1919,17 +2000,4 @@ def recovery_snapshot(paths: ProjectPaths) -> dict[str, Any]:
 
 
 def next_safe_action(work: dict[str, Any]) -> str:
-    return {
-        "draft": "governance authorization",
-        "authorized": "claim required resources and start execution",
-        "active": "produce evidence and immutable delivery anchor",
-        "delivered": "independent quality verdict on current anchor",
-        "quality-passed": "verify mandatory gates and accept",
-        "accepted": "release resources and close",
-        "closed": "none",
-        "rejected": "start a new execution attempt",
-        "blocked": "satisfy block conditions through an independent resolver",
-        "awaiting-user": "wait for scoped User decision",
-        "canceled": "none",
-        "superseded": "follow superseding work item",
-    }.get(work["status"], "inspect unknown state")
+    return NEXT_SAFE_ACTIONS.get(work["status"], "inspect unknown state")

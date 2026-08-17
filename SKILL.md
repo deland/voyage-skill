@@ -57,10 +57,11 @@ the registered runbook for bootstrap activation or legacy migration.
 
 ## Load authoritative detail
 
-- Product boundary: `docs/product/contract.md`
-- Authority and risk: `docs/governance/authority.md`
-- Graph and state model: `docs/system/graph.md`
-- Operating and recovery protocol: `docs/operations/runbook.md`
-- Active source registry: `docs/truth-registry.json`
+- Resolve the truth registry from the managed project's manifest.
+- Resolve the one active, activation-verified source for each required domain:
+  `product`, `governance`, `system`, and `operations`.
+- Resolve optional planning, decision, or extension sources only when the
+  current task requires their registered domain.
+- Never infer a source path from this Skill or from another project's layout.
 
 Use `python3 <voyage-skill>/scripts/voyage.py --help` for deterministic commands.
