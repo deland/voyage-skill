@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
   "project": "voyage-skill",
-  "updated_at": "2026-08-13",
+  "updated_at": "2026-08-17",
   "sources": [
     {
       "id": "product-contract",
@@ -34,6 +34,14 @@
       "version": "0.1.0",
       "status": "active",
       "authority": "user-approved-baseline"
+    },
+    {
+      "id": "development-plan",
+      "domain": "planning",
+      "path": "docs/planning.md",
+      "version": "1",
+      "status": "active",
+      "authority": "user"
     },
     {
       "id": "baseline-decision",
