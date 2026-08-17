@@ -21,6 +21,13 @@ RISK_LEVELS = {"light", "standard", "strict"}
 STATEFUL_RESOURCE_TYPES = {"account", "environment", "session", "window", "quota"}
 ALLOWED_RESOURCE_TYPES = {"file", "account", "port", "environment", "session", "window", "quota"}
 ALLOWED_RESOURCE_MODES = {"exclusive", "shared-read", "serialized", "rebuildable"}
+REQUIRED_TRUTH_DOMAINS = ("product", "governance", "system", "operations")
+REQUIRED_CONTRACT_SECTIONS = {
+    "product": ("Goals", "Non-goals", "Acceptance boundary"),
+    "governance": ("User authority", "Loop authority", "Risk boundary"),
+    "system": ("Sources of truth", "Mandatory gates", "Runtime boundary"),
+    "operations": ("Recovery", "Validation", "Escalation"),
+}
 
 
 class VoyageError(Exception):
@@ -139,10 +146,21 @@ def initialize_project(root: str | Path, project_id: str, truth_registry_path: s
         raise VoyageError("truth registry must stay inside the project root") from exc
     if truth_registry_path and not registry_target.is_file():
         raise VoyageError(f"existing truth registry not found: {registry_relative}")
+    if truth_registry_path:
+        adopted_registry = load_json(registry_target)
+        if adopted_registry.get("schema_version") != SCHEMA_VERSION:
+            raise VoyageError(f"unsupported adopted truth registry schema: {adopted_registry.get('schema_version')}")
+        if adopted_registry.get("project") != project_id:
+            raise VoyageError(
+                f"adopted truth registry project {adopted_registry.get('project')!r} does not match project ID {project_id!r}"
+            )
+        if not isinstance(adopted_registry.get("sources"), list):
+            raise VoyageError("adopted truth registry sources must be an array")
 
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "project_id": project_id,
+        "project_stage": "bootstrap",
         "coordination_boundary": "single-repository-single-machine",
         "truth_registry": registry_relative,
         "graph": ".voyage/graph.json",
@@ -189,34 +207,38 @@ def initialize_project(root: str | Path, project_id: str, truth_registry_path: s
             "schema_version": SCHEMA_VERSION,
             "project": project_id,
             "sources": [
-                {"id": "product", "domain": "product", "path": "docs/voyage/product.md", "version": "1", "status": "active"},
-                {"id": "governance", "domain": "governance", "path": "docs/voyage/governance.md", "version": "1", "status": "active"},
-                {"id": "system", "domain": "system", "path": "docs/voyage/system.md", "version": "1", "status": "active"},
-                {"id": "operations", "domain": "operations", "path": "docs/voyage/operations.md", "version": "1", "status": "active"},
+                {"id": "product", "domain": "product", "path": "docs/voyage/product.md", "version": "1", "status": "draft", "authority": "bootstrap-draft"},
+                {"id": "governance", "domain": "governance", "path": "docs/voyage/governance.md", "version": "1", "status": "draft", "authority": "bootstrap-draft"},
+                {"id": "system", "domain": "system", "path": "docs/voyage/system.md", "version": "1", "status": "draft", "authority": "bootstrap-draft"},
+                {"id": "operations", "domain": "operations", "path": "docs/voyage/operations.md", "version": "1", "status": "draft", "authority": "bootstrap-draft"},
             ],
             "non_authoritative": ["docs/research/", "conversation memory", "worker summaries"],
         }
         atomic_write_json(registry_target, truth_registry)
         contract_bodies = {
             "product.md": (
-                "# Product contract\n\n- Status: active\n- Version: 1\n\n"
-                "Authorize only explicit work items with scope, non-goals, risk, and acceptance criteria. "
-                "Treat User decisions and real outcomes as external product anchors.\n"
+                "# Product contract\n\n- Status: draft\n- Version: 1\n\n"
+                "## Goals\n\nTODO: define the outcomes this project must produce.\n\n"
+                "## Non-goals\n\nTODO: define what this project must not attempt.\n\n"
+                "## Acceptance boundary\n\nTODO: define the evidence required for User acceptance.\n"
             ),
             "governance.md": (
-                "# Governance contract\n\n- Status: active\n- Version: 1\n\n"
-                "Keep execution, final quality, governance, and audit permissions independent. "
-                "Require recorded User decisions for strict-risk work.\n"
+                "# Governance contract\n\n- Status: draft\n- Version: 1\n\n"
+                "## User authority\n\nTODO: define decisions reserved for User.\n\n"
+                "## Loop authority\n\nTODO: define execution, quality, governance, and audit boundaries.\n\n"
+                "## Risk boundary\n\nTODO: define escalation and irreversible-action policy.\n"
             ),
             "system.md": (
-                "# System contract\n\n- Status: active\n- Version: 1\n\n"
-                "Use `.voyage/graph.json`, hash-chained ledger events, immutable delivery anchors, "
-                "registered resources, and mandatory gates as the machine-checkable runtime model.\n"
+                "# System contract\n\n- Status: draft\n- Version: 1\n\n"
+                "## Sources of truth\n\nTODO: define project truth and external anchors.\n\n"
+                "## Mandatory gates\n\nTODO: define gates that fast loops cannot weaken.\n\n"
+                "## Runtime boundary\n\nTODO: define state, resource, and environment boundaries.\n"
             ),
             "operations.md": (
-                "# Operations runbook\n\n- Status: active\n- Version: 1\n\n"
-                "Run `voyage validate` and `voyage recover` before resuming work. "
-                "Append runtime facts through the CLI and re-probe volatile resources before dispatch.\n"
+                "# Operations runbook\n\n- Status: draft\n- Version: 1\n\n"
+                "## Recovery\n\nTODO: define cold-start recovery steps.\n\n"
+                "## Validation\n\nTODO: define required validation and readback.\n\n"
+                "## Escalation\n\nTODO: define stop and User escalation conditions.\n"
             ),
         }
         for filename, body in contract_bodies.items():
@@ -236,7 +258,7 @@ def initialize_project(root: str | Path, project_id: str, truth_registry_path: s
         event_type="project.initialized",
         subject=project_id,
         risk="standard",
-        payload={"schema_version": SCHEMA_VERSION},
+        payload={"schema_version": SCHEMA_VERSION, "project_stage": "bootstrap"},
     )
     return paths
 
@@ -442,6 +464,9 @@ def _validate_event_data(events: list[dict[str, Any]]) -> list[str]:
 
 def _initial_state() -> dict[str, Any]:
     return {
+        "project_id": None,
+        "project_stage": "legacy-bootstrap",
+        "truth_activations": {},
         "works": {},
         "leases": {},
         "rules": {},
@@ -471,6 +496,34 @@ def _validated_counts(value: Any, *, context: str) -> dict[str, int]:
         f"{context} counts do not add up",
     )
     return counts
+
+
+def _require_decision_scope(
+    state: dict[str, Any],
+    decision_id: Any,
+    *,
+    action: str,
+    project_id: str,
+    source_id: str | None = None,
+) -> dict[str, Any]:
+    decision = state["decisions"].get(decision_id)
+    _require(decision is not None and decision.get("loop") == "user", "operation must reference a recorded User decision")
+    scope = decision.get("payload", {}).get("scope")
+    _require(isinstance(scope, dict), "User decision requires an object scope")
+    actions = scope.get("actions")
+    _require(
+        isinstance(actions, list) and (action in actions or "*" in actions),
+        f"User decision does not cover action {action}",
+    )
+    covered_project = scope.get("project_id")
+    _require(covered_project in {project_id, "*"}, f"User decision does not cover project {project_id}")
+    if source_id is not None:
+        sources = scope.get("truth_sources")
+        _require(
+            isinstance(sources, list) and (source_id in sources or "*" in sources),
+            f"User decision does not cover truth source {source_id}",
+        )
+    return decision
 
 
 def _work(state: dict[str, Any], work_id: str) -> dict[str, Any]:
@@ -519,6 +572,66 @@ def replay_events(
 
         if event_type == "project.initialized":
             _require(loop == "system", "project initialization requires system loop")
+            stage = payload.get("project_stage", "legacy-bootstrap")
+            _require(stage in {"bootstrap", "legacy-bootstrap"}, f"invalid initial project stage: {stage}")
+            state["project_stage"] = stage
+            state["project_id"] = subject
+
+        elif event_type == "truth.activated":
+            _require(loop == "governance", "truth activation requires governance loop")
+            source_id = payload.get("source_id")
+            domain = payload.get("domain")
+            path = payload.get("path")
+            _require(isinstance(source_id, str) and source_id, "truth activation requires source_id")
+            _require(isinstance(domain, str) and domain, "truth activation requires domain")
+            _require(isinstance(path, str) and path, "truth activation requires path")
+            _require(source_id not in state["truth_activations"], f"truth source {source_id} already has activation evidence")
+            decision_id = event.get("authorization")
+            _require_decision_scope(
+                state,
+                decision_id,
+                action="truth.activate",
+                project_id=payload.get("project_id"),
+                source_id=source_id,
+            )
+            state["truth_activations"][source_id] = {
+                "event_id": event["event_id"],
+                "decision_id": decision_id,
+                "domain": domain,
+                "path": path,
+                "supersedes": payload.get("supersedes"),
+            }
+            verified_domains = {item["domain"] for item in state["truth_activations"].values()}
+            if set(REQUIRED_TRUTH_DOMAINS).issubset(verified_domains):
+                state["project_stage"] = "operational"
+
+        elif event_type == "project.migrated":
+            _require(loop == "governance", "legacy migration requires governance loop")
+            _require(state["project_stage"] == "legacy-bootstrap", "project migration is only for v0.1 legacy projects")
+            project_id = payload.get("project_id")
+            _require(project_id == state["project_id"], "legacy migration project does not match initialized project")
+            _require_decision_scope(
+                state,
+                event.get("authorization"),
+                action="truth.migrate",
+                project_id=project_id,
+            )
+            sources = payload.get("sources")
+            _require(isinstance(sources, list), "legacy migration requires active truth sources")
+            active_domains = {
+                item.get("domain") for item in sources
+                if isinstance(item, dict) and isinstance(item.get("id"), str) and isinstance(item.get("path"), str)
+            }
+            _require(set(REQUIRED_TRUTH_DOMAINS).issubset(active_domains), "legacy migration requires four active required domains")
+            for item in sources:
+                state["truth_activations"][item["id"]] = {
+                    "event_id": event["event_id"],
+                    "decision_id": event.get("authorization"),
+                    "domain": item["domain"],
+                    "path": item["path"],
+                    "migration": True,
+                }
+            state["project_stage"] = "operational"
 
         elif event_type == "work.created":
             _require(loop == "governance", "work creation requires governance loop")
@@ -549,6 +662,7 @@ def replay_events(
 
         elif event_type == "work.authorized":
             _require(loop == "governance", "work authorization requires governance loop")
+            _require(state["project_stage"] == "operational", "bootstrap project must become operational before work authorization")
             work = _work(state, subject)
             _require(work["status"] == "draft", f"work {subject} is not draft")
             if work["risk"] == "strict":
@@ -799,7 +913,7 @@ def replay_events(
             if event_type == "decision.recorded":
                 _require(loop == "user", "decision recording requires User loop")
                 _require(subject not in state["decisions"], f"decision already recorded: {subject}")
-                state["decisions"][subject] = {"actor": actor, "event_id": event["event_id"], "payload": payload}
+                state["decisions"][subject] = {"actor": actor, "loop": loop, "event_id": event["event_id"], "payload": payload}
             if event_type == "audit.finding":
                 _require(loop == "audit", "audit finding requires audit loop")
             if event_type == "resource.registered":
@@ -835,6 +949,11 @@ def append_event(
         chain_errors = validate_hash_chain(events)
         if chain_errors:
             raise VoyageError("ledger integrity failure: " + "; ".join(chain_errors))
+        resources = load_json(paths.resources)
+        gates = load_json(paths.gates)
+        existing_state = replay_events(events, resources=resources, gates=gates)
+        if existing_state["project_stage"] == "legacy-bootstrap" and event_type not in {"project.initialized", "decision.recorded", "project.migrated"}:
+            raise VoyageError("legacy project requires migration confirmation before the first write operation")
         previous_hash = events[-1]["hash"] if events else None
         event = make_event(
             previous_hash,
@@ -849,9 +968,15 @@ def append_event(
             authorization=authorization,
             caused_by=caused_by,
         )
-        resources = load_json(paths.resources)
-        gates = load_json(paths.gates)
-        replay_events(events + [event], resources=resources, gates=gates)
+        candidate_state = replay_events(events + [event], resources=resources, gates=gates)
+        runtime_errors = _truth_runtime_errors(
+            paths,
+            candidate_state,
+            load_json(paths.truth_registry),
+            load_json(paths.manifest),
+        )
+        if runtime_errors:
+            raise VoyageError("truth runtime consistency failure: " + "; ".join(runtime_errors))
         with paths.ledger.open("a", encoding="utf-8") as handle:
             handle.write(canonical_json(event) + "\n")
             handle.flush()
@@ -920,6 +1045,10 @@ def validate_project(paths: ProjectPaths) -> list[str]:
         registry = load_json(paths.truth_registry)
         if registry.get("schema_version") != SCHEMA_VERSION:
             errors.append(f"unsupported truth registry schema: {registry.get('schema_version')}")
+        if registry.get("project") != manifest.get("project_id"):
+            errors.append(
+                f"truth registry project {registry.get('project')!r} does not match manifest project {manifest.get('project_id')!r}"
+            )
         sources = registry.get("sources")
         if not isinstance(sources, list):
             errors.append("truth registry sources must be an array")
@@ -984,7 +1113,8 @@ def validate_project(paths: ProjectPaths) -> list[str]:
         errors.extend(validate_hash_chain(events))
         errors.extend(_validate_event_data(events))
         if not errors:
-            replay_events(events, resources=resources, gates=gates)
+            state = replay_events(events, resources=resources, gates=gates)
+            errors.extend(_truth_runtime_errors(paths, state, registry, manifest))
     except VoyageError as exc:
         errors.append(str(exc))
     except (KeyError, TypeError, ValueError) as exc:
@@ -997,7 +1127,291 @@ def current_state(paths: ProjectPaths) -> dict[str, Any]:
     errors = validate_hash_chain(events)
     if errors:
         raise VoyageError("ledger integrity failure: " + "; ".join(errors))
-    return replay_events(events, resources=load_json(paths.resources), gates=load_json(paths.gates))
+    state = replay_events(events, resources=load_json(paths.resources), gates=load_json(paths.gates))
+    runtime_errors = _truth_runtime_errors(paths, state, load_json(paths.truth_registry), load_json(paths.manifest))
+    if runtime_errors:
+        raise VoyageError("truth runtime consistency failure: " + "; ".join(runtime_errors))
+    return state
+
+
+def _truth_runtime_errors(
+    paths: ProjectPaths,
+    state: dict[str, Any],
+    registry: dict[str, Any],
+    manifest: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    declared_stage = manifest.get("project_stage")
+    derived_stage = state.get("project_stage")
+    if declared_stage is not None and declared_stage not in {"bootstrap", "operational"}:
+        errors.append(f"manifest project_stage is invalid: {declared_stage}")
+    elif declared_stage is not None and declared_stage != derived_stage:
+        errors.append(f"manifest project_stage {declared_stage} conflicts with ledger-derived {derived_stage}")
+
+    source_items = registry.get("sources")
+    if not isinstance(source_items, list):
+        return errors
+    sources = {
+        item.get("id"): item
+        for item in source_items
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    activations = state.get("truth_activations", {})
+    for source_id, activation in activations.items():
+        source = sources.get(source_id)
+        if source is None:
+            errors.append(f"truth activation references unknown registry source {source_id}")
+            continue
+        if source.get("status") == "draft":
+            errors.append(f"truth activation {source_id} targets a draft registry source")
+        if activation.get("domain") != source.get("domain") or activation.get("path") != source.get("path"):
+            errors.append(f"truth activation identity does not match registry for {source_id}")
+        try:
+            target = _truth_source_path(paths, source)
+        except VoyageError as exc:
+            errors.append(str(exc))
+            continue
+        if not target.is_file():
+            errors.append(f"activated truth source is missing: {source.get('path')}")
+        elif not target.read_text(encoding="utf-8").strip():
+            errors.append(f"activated truth source is empty: {source.get('path')}")
+
+    if derived_stage == "operational":
+        active_by_domain: dict[str, list[dict[str, Any]]] = {}
+        for source in sources.values():
+            if source.get("status") == "active" and source.get("domain") in REQUIRED_TRUTH_DOMAINS:
+                active_by_domain.setdefault(source["domain"], []).append(source)
+        for domain in REQUIRED_TRUTH_DOMAINS:
+            active = active_by_domain.get(domain, [])
+            if len(active) != 1:
+                errors.append(f"operational project requires exactly one active truth source in domain {domain}")
+                continue
+            source_id = active[0]["id"]
+            if source_id not in activations:
+                errors.append(f"active truth source {source_id} lacks activation evidence")
+    return errors
+
+
+def _truth_source_path(paths: ProjectPaths, source: dict[str, Any]) -> Path:
+    path_value = source.get("path")
+    _require(isinstance(path_value, str) and path_value, "truth source requires path")
+    target = (paths.root / path_value).resolve()
+    try:
+        target.relative_to(paths.root)
+    except ValueError as exc:
+        raise VoyageError(f"truth source escapes project root: {path_value}") from exc
+    return target
+
+
+def _validate_bootstrap_contract(source: dict[str, Any], content: str) -> None:
+    domain = source.get("domain")
+    if source.get("authority") != "bootstrap-draft":
+        _require(bool(content.strip()), "truth contract must not be empty")
+        return
+    _require("TODO" not in content, f"truth contract {source.get('id')} contains unresolved TODO")
+    for section in REQUIRED_CONTRACT_SECTIONS.get(domain, ()):
+        _require(f"## {section}" in content, f"truth contract {source.get('id')} missing required section {section}")
+    _require("- Status: draft" in content, f"truth contract {source.get('id')} must be draft before activation")
+
+
+def activate_truth(
+    paths: ProjectPaths,
+    *,
+    actor: str,
+    source_id: str,
+    decision_id: str,
+    supersedes: str | None = None,
+) -> dict[str, Any]:
+    manifest = load_json(paths.manifest)
+    registry = load_json(paths.truth_registry)
+    state = current_state(paths)
+    project_id = manifest.get("project_id")
+    _require(isinstance(project_id, str) and project_id, "manifest requires project_id")
+    _require(source_id not in state["truth_activations"], f"truth source {source_id} already has activation evidence")
+    _require_decision_scope(
+        state,
+        decision_id,
+        action="truth.activate",
+        project_id=project_id,
+        source_id=source_id,
+    )
+
+    sources = registry.get("sources")
+    _require(isinstance(sources, list), "truth registry sources must be an array")
+    target = next((item for item in sources if isinstance(item, dict) and item.get("id") == source_id), None)
+    _require(target is not None, f"unknown truth source: {source_id}")
+    domain = target.get("domain")
+    _require(isinstance(domain, str) and domain, f"truth source {source_id} requires domain")
+    contract_path = _truth_source_path(paths, target)
+    _require(contract_path.is_file(), f"truth contract file is missing: {target.get('path')}")
+    original_contract = contract_path.read_text(encoding="utf-8")
+    _validate_bootstrap_contract(target, original_contract)
+
+    active_same_domain = [
+        item for item in sources
+        if isinstance(item, dict) and item.get("domain") == domain and item.get("status") == "active" and item.get("id") != source_id
+    ]
+    if active_same_domain and supersedes is None:
+        raise VoyageError(f"domain {domain} already has active source; activation requires explicit supersedes")
+    if supersedes is not None:
+        previous = next((item for item in sources if isinstance(item, dict) and item.get("id") == supersedes), None)
+        _require(previous is not None and previous.get("status") == "active", f"superseded source is not active: {supersedes}")
+        _require(previous.get("domain") == domain, "supersedes must target a source in the same domain")
+
+    updated_registry = deepcopy(registry)
+    updated_target = next(item for item in updated_registry["sources"] if item.get("id") == source_id)
+    updated_target["status"] = "active"
+    updated_target["authority"] = f"user-decision:{decision_id}"
+    if supersedes is not None:
+        updated_previous = next(item for item in updated_registry["sources"] if item.get("id") == supersedes)
+        updated_previous["status"] = "superseded"
+
+    updated_contract = original_contract
+    if target.get("authority") == "bootstrap-draft":
+        updated_contract = original_contract.replace("- Status: draft", "- Status: active", 1)
+
+    original_manifest = deepcopy(manifest)
+    original_registry = deepcopy(registry)
+    existing_domains = {item["domain"] for item in state["truth_activations"].values()}
+    next_stage = "operational" if set(REQUIRED_TRUTH_DOMAINS).issubset(existing_domains | {domain}) else "bootstrap"
+    updated_manifest = deepcopy(manifest)
+    updated_manifest["project_stage"] = next_stage
+
+    atomic_write_json(paths.truth_registry, updated_registry)
+    atomic_write_json(paths.manifest, updated_manifest)
+    if updated_contract != original_contract:
+        _write_text(contract_path, updated_contract)
+    try:
+        return append_event(
+            paths,
+            actor=actor,
+            loop="governance",
+            event_type="truth.activated",
+            subject=source_id,
+            risk="standard",
+            payload={
+                "source_id": source_id,
+                "domain": domain,
+                "path": target["path"],
+                "project_id": project_id,
+                "supersedes": supersedes,
+            },
+            evidence=[f"contract:{target['path']}", f"decision:{decision_id}"],
+            authorization=decision_id,
+        )
+    except Exception:
+        atomic_write_json(paths.manifest, original_manifest)
+        atomic_write_json(paths.truth_registry, original_registry)
+        if updated_contract != original_contract:
+            _write_text(contract_path, original_contract)
+        raise
+
+
+def migrate_legacy_project(
+    paths: ProjectPaths,
+    *,
+    actor: str,
+    decision_id: str,
+) -> dict[str, Any]:
+    manifest = load_json(paths.manifest)
+    _require("project_stage" not in manifest, "project migration is only for v0.1 legacy projects")
+    project_id = manifest.get("project_id")
+    _require(isinstance(project_id, str) and project_id, "manifest requires project_id")
+    state = current_state(paths)
+    _require(state["project_stage"] == "legacy-bootstrap", "project migration is only for v0.1 legacy projects")
+    _require_decision_scope(
+        state,
+        decision_id,
+        action="truth.migrate",
+        project_id=project_id,
+    )
+
+    registry = load_json(paths.truth_registry)
+    sources = registry.get("sources")
+    _require(isinstance(sources, list), "truth registry sources must be an array")
+    active_required: dict[str, dict[str, Any]] = {}
+    for source in sources:
+        if not isinstance(source, dict) or source.get("status") != "active":
+            continue
+        domain = source.get("domain")
+        if domain in REQUIRED_TRUTH_DOMAINS:
+            _require(domain not in active_required, f"legacy project has multiple active truth sources in domain {domain}")
+            contract_path = _truth_source_path(paths, source)
+            _require(contract_path.is_file(), f"truth contract file is missing: {source.get('path')}")
+            _require(bool(contract_path.read_text(encoding="utf-8").strip()), f"truth contract is empty: {source.get('path')}")
+            active_required[domain] = source
+    _require(
+        set(active_required) == set(REQUIRED_TRUTH_DOMAINS),
+        "legacy migration requires four active required domains",
+    )
+
+    original_manifest = deepcopy(manifest)
+    updated_manifest = deepcopy(manifest)
+    updated_manifest["project_stage"] = "operational"
+    atomic_write_json(paths.manifest, updated_manifest)
+    try:
+        return append_event(
+            paths,
+            actor=actor,
+            loop="governance",
+            event_type="project.migrated",
+            subject=project_id,
+            risk="standard",
+            payload={
+                "project_id": project_id,
+                "from": "v0.1-legacy",
+                "to": "operational",
+                "sources": [
+                    {"id": source["id"], "domain": domain, "path": source["path"]}
+                    for domain, source in sorted(active_required.items())
+                ],
+            },
+            evidence=[f"decision:{decision_id}", "truth-registry:active-required-domains"],
+            authorization=decision_id,
+        )
+    except Exception:
+        atomic_write_json(paths.manifest, original_manifest)
+        raise
+
+
+def truth_status(paths: ProjectPaths) -> dict[str, Any]:
+    manifest = load_json(paths.manifest)
+    registry = load_json(paths.truth_registry)
+    state = current_state(paths)
+    activations = state.get("truth_activations", {})
+    sources: list[dict[str, Any]] = []
+    verified_domains: set[str] = set()
+    unverified_active: list[str] = []
+    for source in registry.get("sources", []):
+        if not isinstance(source, dict):
+            continue
+        item = deepcopy(source)
+        verified = source.get("id") in activations
+        item["activation_verified"] = verified
+        item["activation_event"] = activations.get(source.get("id"), {}).get("event_id") if verified else None
+        sources.append(item)
+        if source.get("status") == "active" and verified and source.get("domain") in REQUIRED_TRUTH_DOMAINS:
+            verified_domains.add(source["domain"])
+        elif source.get("status") == "active" and not verified:
+            unverified_active.append(source.get("id", "<unknown>"))
+    missing = [domain for domain in REQUIRED_TRUTH_DOMAINS if domain not in verified_domains]
+    stage = state.get("project_stage", manifest.get("project_stage", "legacy-bootstrap"))
+    legacy = "project_stage" not in manifest or stage == "legacy-bootstrap"
+    if legacy:
+        next_action = "record a scoped User decision and run voyage truth migrate"
+    elif missing:
+        next_action = "review draft contracts, record a scoped User decision, and run voyage truth activate"
+    else:
+        next_action = "none"
+    return {
+        "project_stage": stage,
+        "legacy": legacy,
+        "required_domains": list(REQUIRED_TRUTH_DOMAINS),
+        "missing_domains": missing,
+        "unverified_active_sources": sorted(unverified_active),
+        "sources": sources,
+        "next_safe_action": next_action,
+    }
 
 
 def active_leases(state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1030,6 +1444,7 @@ def new_lease_expiry(ttl_minutes: int) -> str:
 
 def recovery_snapshot(paths: ProjectPaths) -> dict[str, Any]:
     state = current_state(paths)
+    bootstrap = truth_status(paths)
     works = []
     for work in sorted(state["works"].values(), key=lambda item: item["id"]):
         works.append(
@@ -1045,6 +1460,8 @@ def recovery_snapshot(paths: ProjectPaths) -> dict[str, Any]:
     active_blocks = [dict({"id": block_id}, **block) for block_id, block in state["blocks"].items() if block["active"]]
     return {
         "project_root": str(paths.root),
+        "project_stage": bootstrap["project_stage"],
+        "bootstrap": bootstrap,
         "validated_at": utc_now(),
         "truth_registry": str(paths.truth_registry.relative_to(paths.root)),
         "ledger_head": state["last_event"],

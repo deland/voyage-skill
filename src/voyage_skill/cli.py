@@ -9,16 +9,19 @@ from typing import Any
 
 from .core import (
     VoyageError,
+    activate_truth,
     active_leases,
     append_event,
     current_state,
     initialize_project,
     load_json,
+    migrate_legacy_project,
     new_lease_expiry,
     probe_port,
     project_paths,
     register_resource,
     recovery_snapshot,
+    truth_status,
     validate_project,
 )
 
@@ -51,6 +54,19 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="Show the derived project state")
     status.add_argument("--full", action="store_true", help="Include complete derived state")
     sub.add_parser("recover", help="Show a cold-start recovery snapshot")
+
+    truth = sub.add_parser("truth", help="Inspect and activate registered sources of truth")
+    truth_sub = truth.add_subparsers(dest="truth_command", required=True)
+    truth_sub.add_parser("list", help="List registered truth sources and activation evidence")
+    truth_sub.add_parser("status", help="Show bootstrap stage, gaps, and next safe action")
+    activate = truth_sub.add_parser("activate", help="Activate one exact truth source through a scoped User decision")
+    activate.add_argument("source_id")
+    activate.add_argument("--decision", required=True, help="Recorded User decision ID covering this source")
+    activate.add_argument("--supersedes", help="Existing active source in the same domain")
+    common_actor(activate, loop="governance")
+    migrate = truth_sub.add_parser("migrate", help="Confirm a v0.1 legacy project through a scoped User decision")
+    migrate.add_argument("--decision", required=True, help="Recorded User decision ID covering truth.migrate")
+    common_actor(migrate, loop="governance")
 
     work = sub.add_parser("work", help="Operate work items")
     work_sub = work.add_subparsers(dest="work_command", required=True)
@@ -360,10 +376,40 @@ def handle_rule(paths, args) -> None:
         append_from_args(paths, args, event_type="rule.superseded", subject=args.rule_id, payload={"replacement": args.replacement})
 
 
+def handle_truth(paths, args) -> None:
+    if args.truth_command == "list":
+        status = truth_status(paths)
+        emit({"project_stage": status["project_stage"], "sources": status["sources"]})
+    elif args.truth_command == "status":
+        emit(truth_status(paths))
+    elif args.truth_command == "activate":
+        event = activate_truth(
+            paths,
+            actor=args.actor,
+            source_id=args.source_id,
+            decision_id=args.decision,
+            supersedes=args.supersedes,
+        )
+        emit({
+            "activated": args.source_id,
+            "event": event["event_id"],
+            "decision": args.decision,
+            "project_stage": truth_status(paths)["project_stage"],
+        })
+    elif args.truth_command == "migrate":
+        event = migrate_legacy_project(paths, actor=args.actor, decision_id=args.decision)
+        emit({
+            "migrated": event["subject"],
+            "event": event["event_id"],
+            "decision": args.decision,
+            "project_stage": truth_status(paths)["project_stage"],
+        })
+
+
 def run(args: argparse.Namespace) -> int:
     if args.command == "init":
         paths = initialize_project(args.root, args.project_id, args.truth_registry)
-        emit({"initialized": str(paths.root), "manifest": str(paths.manifest)})
+        emit({"initialized": str(paths.root), "manifest": str(paths.manifest), "project_stage": "bootstrap"})
         return 0
 
     paths = project_paths(args.root)
@@ -389,6 +435,8 @@ def run(args: argparse.Namespace) -> int:
         return 0
     if args.command == "work":
         handle_work(paths, args)
+    elif args.command == "truth":
+        handle_truth(paths, args)
     elif args.command == "gate":
         append_from_args(
             paths, args, event_type="gate.recorded", subject=args.work,

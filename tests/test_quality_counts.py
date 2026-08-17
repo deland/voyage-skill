@@ -5,10 +5,11 @@ import unittest
 from pathlib import Path
 
 from voyage_skill.core import VoyageError, append_event, current_state, initialize_project, load_events
+from tests.support import operational_project
 
 
 def delivered_project(root: Path):
-    paths = initialize_project(root, "quality-counts")
+    paths = operational_project(root, "quality-counts")
     append_event(
         paths,
         actor="gov",

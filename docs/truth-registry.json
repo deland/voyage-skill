@@ -1,61 +1,61 @@
 {
-  "schema_version": "0.1.0",
-  "project": "voyage-skill",
-  "updated_at": "2026-08-17",
-  "sources": [
-    {
-      "id": "product-contract",
-      "domain": "product",
-      "path": "docs/product/contract.md",
-      "version": "0.1.0",
-      "status": "active",
-      "authority": "user-approved-baseline"
-    },
-    {
-      "id": "governance-authority",
-      "domain": "governance",
-      "path": "docs/governance/authority.md",
-      "version": "0.1.0",
-      "status": "active",
-      "authority": "user-approved-baseline"
-    },
-    {
-      "id": "system-graph",
-      "domain": "system",
-      "path": "docs/system/graph.md",
-      "version": "0.1.0",
-      "status": "active",
-      "authority": "user-approved-baseline"
-    },
-    {
-      "id": "operations-runbook",
-      "domain": "operations",
-      "path": "docs/operations/runbook.md",
-      "version": "0.1.0",
-      "status": "active",
-      "authority": "user-approved-baseline"
-    },
-    {
-      "id": "development-plan",
-      "domain": "planning",
-      "path": "docs/planning.md",
-      "version": "1",
-      "status": "active",
-      "authority": "user"
-    },
-    {
-      "id": "decision-log",
-      "domain": "decisions",
-      "path": "docs/decisions/index.md",
-      "version": "2",
-      "status": "active",
-      "authority": "user"
-    }
-  ],
   "non_authoritative": [
     "docs/research/",
     "docs/design/",
     "conversation memory",
     "worker summaries"
-  ]
+  ],
+  "project": "voyage-skill",
+  "schema_version": "0.1.0",
+  "sources": [
+    {
+      "authority": "user-approved-baseline",
+      "domain": "product",
+      "id": "product-contract",
+      "path": "docs/product/contract.md",
+      "status": "active",
+      "version": "0.1.0"
+    },
+    {
+      "authority": "user-approved-baseline",
+      "domain": "governance",
+      "id": "governance-authority",
+      "path": "docs/governance/authority.md",
+      "status": "active",
+      "version": "0.1.0"
+    },
+    {
+      "authority": "user-approved-baseline",
+      "domain": "system",
+      "id": "system-graph",
+      "path": "docs/system/graph.md",
+      "status": "active",
+      "version": "0.1.0"
+    },
+    {
+      "authority": "user-approved-baseline",
+      "domain": "operations",
+      "id": "operations-runbook",
+      "path": "docs/operations/runbook.md",
+      "status": "active",
+      "version": "0.1.0"
+    },
+    {
+      "authority": "user-decision:USER-MK101-OPTIONAL-TRUTH",
+      "domain": "planning",
+      "id": "development-plan",
+      "path": "docs/planning.md",
+      "status": "active",
+      "version": "1"
+    },
+    {
+      "authority": "user-decision:USER-MK101-OPTIONAL-TRUTH",
+      "domain": "decisions",
+      "id": "decision-log",
+      "path": "docs/decisions/index.md",
+      "status": "active",
+      "version": "2"
+    }
+  ],
+  "updated_at": "2026-08-17"
 }

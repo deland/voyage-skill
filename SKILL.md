@@ -11,9 +11,10 @@ Treat this file as a stable entry, never as project state.
 
 1. Locate the managed project root containing `.voyage/manifest.json`.
 2. Read the truth registry named by the manifest.
-3. Read only the active sources needed for the current domain.
-4. Treat `docs/research/`, chat memory, summaries, drafts, and worker claims as non-authoritative.
-5. Stop and report a conflict when an active source cannot be resolved.
+3. Run `voyage truth status`; treat bootstrap and legacy-bootstrap projects as not authorized for work execution.
+4. Read only the active, activation-verified sources needed for the current domain.
+5. Treat `docs/research/`, chat memory, summaries, drafts, and worker claims as non-authoritative.
+6. Stop and report a conflict when an active source cannot be resolved.
 
 ## Recover
 
@@ -21,11 +22,14 @@ Run these commands before resuming an existing project:
 
 ```bash
 python3 <voyage-skill>/scripts/voyage.py --root <project> validate
+python3 <voyage-skill>/scripts/voyage.py --root <project> truth status
 python3 <voyage-skill>/scripts/voyage.py --root <project> recover
 ```
 
 Use the recovery output to distinguish observed, declared, unknown, and
 conflicting state. Re-probe volatile resources before dispatching work.
+Do not authorize work until the reported project stage is `operational`; follow
+the registered runbook for bootstrap activation or legacy migration.
 
 ## Operate
 

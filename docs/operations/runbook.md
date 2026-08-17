@@ -1,8 +1,8 @@
 # VoyageSkill operations and recovery runbook
 
-- Version: 0.1.0
+- Version: 0.2.0
 - Status: active
-- Authority: D-0001
+- Authority: D-0001, D-0002
 
 ## Cold start
 
@@ -18,8 +18,48 @@ Commands:
 
 ```bash
 python3 <voyage-skill>/scripts/voyage.py --root <project> validate
+python3 <voyage-skill>/scripts/voyage.py --root <project> truth status
 python3 <voyage-skill>/scripts/voyage.py --root <project> recover
 ```
+
+## Bootstrap and truth activation
+
+`voyage init` creates a `bootstrap` project. Generated product, governance,
+system, and operations contracts remain draft and contain explicit TODO fields.
+Review and edit them before recording any activation decision.
+
+Inspect the exact sources and gaps:
+
+```bash
+voyage --root <project> truth list
+voyage --root <project> truth status
+```
+
+Record a User-loop `decision.recorded` event whose payload scope contains the
+project ID, action `truth.activate`, and exact source IDs. Then activate each
+source through governance:
+
+```bash
+voyage --root <project> truth activate <source-id> --decision <decision-id> --actor <governance-principal>
+```
+
+When replacing an active source in the same domain, add `--supersedes
+<old-source-id>`. Cross-domain replacement and activation without matching User
+scope are invalid. The project becomes operational only after product,
+governance, system, and operations are active and each has ledger activation
+evidence. Work authorization is blocked before then.
+
+For a v0.1 manifest with no project stage, first inspect its active sources,
+record a User decision scoped to action `truth.migrate` and the exact project,
+then run:
+
+```bash
+voyage --root <project> truth migrate --decision <decision-id> --actor <governance-principal>
+```
+
+Migration appends confirmation evidence and adds the operational stage; it does
+not rewrite earlier ledger events. Do not use migration to bypass a new
+bootstrap project's per-source activation.
 
 ## Work protocol
 

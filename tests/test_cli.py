@@ -7,6 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from voyage_skill.core import load_json, project_paths
+
+from tests.support import reviewed_contracts
+
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SCRIPT = REPOSITORY / "scripts" / "voyage.py"
@@ -30,8 +34,24 @@ class VoyageCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, expected, msg=f"stdout={result.stdout}\nstderr={result.stderr}")
         return json.loads(result.stdout) if result.stdout else {"stderr": result.stderr}
 
-    def test_cli_end_to_end_and_recovery(self) -> None:
+    def init_operational(self) -> None:
         self.run_cli("init", "--project-id", "cli-project")
+        paths = project_paths(self.root)
+        reviewed_contracts(paths)
+        source_ids = [source["id"] for source in load_json(paths.truth_registry)["sources"]]
+        payload = {
+            "decision": "truth.activate",
+            "scope": {"actions": ["truth.activate"], "project_id": "cli-project", "truth_sources": source_ids},
+        }
+        self.run_cli(
+            "event", "record", "--type", "decision.recorded", "--subject", "USER-BOOTSTRAP",
+            "--payload-json", json.dumps(payload), "--actor", "user", "--loop", "user",
+        )
+        for source_id in source_ids:
+            self.run_cli("truth", "activate", source_id, "--decision", "USER-BOOTSTRAP", "--actor", "gov")
+
+    def test_cli_end_to_end_and_recovery(self) -> None:
+        self.init_operational()
         self.run_cli("validate")
         self.run_cli("work", "create", "W-1", "--title", "CLI flow", "--scope", "temporary test project", "--acceptance", "works", "--actor", "gov")
         self.run_cli("work", "authorize", "W-1", "--actor", "gov")
@@ -45,7 +65,7 @@ class VoyageCliTests(unittest.TestCase):
         self.assertEqual(recovered["work"][0]["next_safe_action"], "none")
 
     def test_cli_rejects_self_review(self) -> None:
-        self.run_cli("init", "--project-id", "cli-project")
+        self.init_operational()
         self.run_cli("work", "create", "W-1", "--title", "CLI flow", "--scope", "temporary test project", "--acceptance", "works", "--actor", "gov")
         self.run_cli("work", "authorize", "W-1", "--actor", "gov")
         self.run_cli("work", "start", "W-1", "--actor", "dev")
@@ -60,7 +80,7 @@ class VoyageCliTests(unittest.TestCase):
         self.assertIn("executor cannot issue final quality verdict", result.stderr)
 
     def test_cli_registers_resource_and_rejects_duplicate(self) -> None:
-        self.run_cli("init", "--project-id", "cli-project")
+        self.init_operational()
         registered = self.run_cli(
             "resource", "register", "file:shared", "--type", "file", "--mode", "exclusive",
             "--conflict-key", "shared.txt", "--actor", "gov",

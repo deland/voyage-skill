@@ -16,13 +16,14 @@ from voyage_skill.core import (
     register_resource,
     validate_project,
 )
+from tests.support import operational_project
 
 
 class VoyageCoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        self.paths = initialize_project(self.root, "example")
+        self.paths = operational_project(self.root, "example")
 
     def tearDown(self) -> None:
         self.temporary.cleanup()

@@ -582,3 +582,198 @@ active → retired | superseded
 - Readback: local HEAD resolves to the anchor; recovery reports no blocks or leases; forward project on the same anchor recovered as `closed` with next action `none`
 - Remaining issues: official `quick_validate.py` remains unknown because its external environment lacks PyYAML; equivalent frontmatter rules and repository metadata tests pass. This is a validator-environment issue, not an MK-000 product failure
 - Next safe action: commit and push this append-only CLOSE record, verify the remote branch contains the implementation anchor, then begin MK-101 with a new START record and test matrix
+
+---
+
+## 2026-08-17 · DEV-0002 · MK-101 · START
+
+- Status: in-progress
+- Baseline: `58d6dffe64b3224038c785c901137d23f84f8a95`
+- Anchor: pending
+- Supersedes: none
+- Scope: bootstrap stage、draft contracts、User-scoped truth activation、operational gate、legacy v0.1 migration、truth CLI and recovery gaps
+- Non-goals: typed evidence objects、MK-103 state convergence、MK-104 four-way recovery classification、optional extensions、derived graph
+- Risk: standard；改变新项目初始化和首个工作授权前置条件，但不执行生产或外部写入
+- Dependencies: MK-000、D-0002、现有 append-only ledger 和 truth registry
+- Acceptance gates: 以下测试全部先于实现定义并通过；原有回归适配新 bootstrap 语义后全部通过；dogfood 显式迁移；不可变提交与远端读回
+- Actual result: pending
+- Tests: defined below before implementation
+- Readback: pending
+- Remaining issues: pending
+- Next safe action: 写入 ST-1011 至 ST-1016 测试并确认当前 v0.1 实现按预期失败
+
+### DEV-0002 子任务与测试矩阵
+
+#### ST-1011 · Bootstrap 初始化合同
+
+实现前测试用例：
+
+1. `new_manifest_starts_in_bootstrap`：新 manifest 声明 `project_stage=bootstrap` 且通过 Schema。
+2. `generated_required_truth_starts_as_draft`：product、governance、system、operations 注册项和文件均为 draft。
+3. `generated_contracts_expose_unresolved_review_fields`：模板显式保留目标、非目标、权限和运行边界待确认项，不可被误认成已确认事实。
+4. `bootstrap_recovery_lists_required_domain_gaps`：recover 明确报告四个缺口和下一安全动作。
+5. `bootstrap_rejects_work_authorization`：可创建工作，但未 operational 前不能 authorize。
+6. `bootstrap_project_remains_structurally_valid`：draft 项目仍可 validate 和冷启动。
+
+#### ST-1012 · User-scoped 真源激活
+
+实现前测试用例：
+
+1. `activation_rejects_unknown_decision`：未知 decision ID 不得激活。
+2. `activation_rejects_non_user_decision`：非 User loop 不能产生可用激活决定。
+3. `activation_rejects_scope_mismatch`：decision 未覆盖 `truth.activate`、项目或 source ID 时拒绝。
+4. `activation_rejects_missing_contract_file`：文件不存在时拒绝且 registry/ledger 不前移。
+5. `activation_rejects_unresolved_bootstrap_contract`：仍含 TODO 或缺必需章节时拒绝。
+6. `activation_records_decision_and_exact_source`：成功事件引用 decision、source、domain、path，并将 registry/文档置为 active。
+7. `failed_activation_is_atomic`：任何失败均不改 manifest、registry、文档和 ledger head。
+
+#### ST-1013 · Operational 门禁与替代
+
+实现前测试用例：
+
+1. `partial_activation_remains_bootstrap`：少于四个必需领域时保持 bootstrap。
+2. `four_verified_domains_become_operational`：四领域 active 且各有激活事件后才切换 operational。
+3. `operational_stage_allows_work_authorization`：进入 operational 后可授权工作。
+4. `duplicate_active_domain_requires_supersedes`：同领域已有 active 时必须显式 supersedes。
+5. `supersedes_must_target_same_domain`：跨领域替代拒绝。
+6. `successful_supersession_is_atomic_and_auditable`：旧源变 superseded，新源 active，事件引用两者与 User decision。
+7. `activation_cannot_be_replayed_for_same_source`：同一 source 不可用重复事件伪造新确认。
+
+#### ST-1014 · 采用已有真源
+
+实现前测试用例：
+
+1. `adopted_active_sources_do_not_auto_operationalize`：已有文件和 active 标签不构成激活证据。
+2. `adopted_source_requires_user_scoped_activation`：已有 active source 仍必须逐项记录 User-scoped activation。
+3. `adopted_all_required_domains_need_all_evidence`：四领域齐全但缺任一激活事件仍为 bootstrap。
+4. `adopted_registry_is_not_rewritten_on_failed_activation`：失败不改用户提供的 registry。
+
+#### ST-1015 · v0.1 兼容迁移
+
+实现前测试用例：
+
+1. `legacy_manifest_recovers_as_legacy_bootstrap`：缺 stage 的 v0.1 项目可读，但 recover 明确标记 legacy 和迁移动作。
+2. `legacy_first_write_requires_confirmation`：除记录 User decision 外的首次写操作在迁移前拒绝。
+3. `legacy_migration_rejects_missing_or_mismatched_decision`：未知、错误 action 或错误 project scope 均拒绝。
+4. `legacy_migration_requires_four_existing_active_domains`：缺正式领域时不能迁移 operational。
+5. `legacy_migration_appends_without_rewriting_history`：旧账本字节前缀保持不变，只追加迁移事件。
+6. `legacy_migration_sets_operational_and_unblocks_writes`：成功后 manifest operational，recover 清除迁移缺口并允许授权。
+7. `already_staged_project_cannot_use_legacy_migration`：新 bootstrap 项目不能绕过逐项激活。
+
+#### ST-1016 · CLI、正式文档与 dogfood
+
+实现前测试用例：
+
+1. `cli_truth_list_and_status_are_structured`：list/status 输出 source 状态、证据、缺口和下一动作。
+2. `cli_truth_activate_requires_decision`：CLI 缺 decision 或 scope 错误时稳定非零且无 traceback。
+3. `cli_bootstrap_to_operational_end_to_end`：编辑四份合同、记录决定、激活、授权工作完整通过。
+4. `cli_truth_migrate_handles_legacy_project`：显式迁移命令只接受匹配的 User 决定。
+5. `skill_and_runbook_document_bootstrap_protocol`：Skill 保持精简入口，详细激活/迁移命令由 runbook 承载。
+6. `dogfood_repository_is_explicitly_operational`：仓库自身通过追加决定和迁移事件进入 operational。
+7. `manifest_and_registry_schemas_accept_bootstrap_and_legacy`：Schema 接受新字段并保留 v0.1 读取兼容，不把 legacy 静默视为 operational。
+
+### DEV-0002 测试执行顺序
+
+1. 新增上述测试与测试辅助代码，不修改产品实现；运行并保存预期失败。
+2. 按 ST-1011 → ST-1016 顺序实现；每完成一项立即运行目标测试和此前累计测试。
+3. 实现完成后适配原有测试，使其显式选择 bootstrap 或完成激活，不提供隐藏后门。
+4. 运行全量 unittest、dogfood validate/recover、compileall、Skill 校验和干净临时项目前向验证。
+5. 对不可变提交重复质量验证；在文件末尾追加 DEV-0002 CLOSE，不修改历史记录。
+
+---
+
+## 2026-08-17 · DEV-0002 · MK-101 · UPDATE
+
+- Status: in-progress; pre-commit hardening
+- Baseline: `58d6dffe64b3224038c785c901137d23f84f8a95`
+- Anchor: pending
+- Supersedes: none
+- Scope: add ST-1017 runtime anti-bypass checks discovered during full-regression review
+- Non-goals: unchanged
+- Risk: standard; prevents direct core API and manifest edits from manufacturing operational truth
+- Dependencies: ST-1011 through ST-1016 passing 91/91 full regression
+- Acceptance gates: four tests below fail before implementation, pass after implementation, then 95-test full regression passes
+- Actual result: pending
+- Tests: defined before implementation below
+- Readback: dogfood migration already operational through decision and migration events
+- Remaining issues: runtime/registry drift checks not yet centralized
+- Next safe action: add ST-1017 tests, confirm red, implement one candidate-state consistency validator
+
+### ST-1017 · 运行时一致性与 direct API 防绕过
+
+实现前测试用例：
+
+1. `validate_reports_manifest_stage_drift`：仅手改 manifest 为 operational 不能改变 ledger 派生阶段，validate 报冲突。
+2. `direct_activation_cannot_target_draft_registry`：直接 append `truth.activated` 不能绕过 draft registry 状态。
+3. `direct_activation_must_match_registry_identity`：事件中的 source/domain/path 必须与 registry 精确一致。
+4. `operational_registry_requires_verified_current_sources`：operational 项目的每个当前 active 必需领域源都必须有匹配激活证据。
+
+---
+
+## 2026-08-17 · DEV-0002 · MK-101 · UPDATE
+
+- Status: in-progress; optional truth readback hardening
+- Baseline: `58d6dffe64b3224038c785c901137d23f84f8a95`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-1018 closes active-but-unverified optional truth ambiguity found by dogfood readback
+- Non-goals: optional domains do not become required operational domains
+- Risk: standard; only adds scoped activation evidence and preserves the four-domain operational gate
+- Dependencies: ST-1017 passing; dogfood operational migration event present
+- Acceptance gates: tests below fail first, then pass; dogfood status has no unverified active source
+- Actual result: pending
+- Tests: defined before implementation below
+- Readback: planning and decisions currently appear in `unverified_active_sources`
+- Remaining issues: optional domain activation is currently rejected by core
+- Next safe action: add two tests, allow non-empty optional domains, append scoped dogfood activation evidence
+
+### ST-1018 · Optional active truth evidence
+
+实现前测试用例：
+
+1. `optional_truth_source_can_be_activated_without_changing_required_gate`：optional source 可按同一 User-scoped 流程激活，但不能替代四个必需领域。
+2. `dogfood_has_no_unverified_active_truth`：仓库所有 active truth source 均有 ledger 激活或迁移证据。
+
+---
+
+## 2026-08-17 · DEV-0002 · MK-101 · UPDATE
+
+- Status: in-progress; adopted registry identity hardening
+- Baseline: `58d6dffe64b3224038c785c901137d23f84f8a95`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-1019 binds an adopted truth registry to the initialized project before control files are written
+- Non-goals: no remote registry or signature verification
+- Risk: standard; rejects ambiguous adoption earlier
+- Dependencies: ST-1018 passing; adopted registry support
+- Acceptance gates: mismatch test fails first, then passes without partial `.voyage` initialization; full regression remains green
+- Actual result: pending
+- Tests: defined before implementation below
+- Readback: current initializer accepts a registry whose `project` differs from `--project-id`
+- Remaining issues: pending test and fix
+- Next safe action: add mismatch/atomicity test, enforce project identity before initialization writes
+
+### ST-1019 · Adopted registry project identity
+
+实现前测试用例：
+
+1. `adopted_registry_project_must_match_manifest_without_partial_init`：registry `project` 与 `--project-id` 不同必须拒绝，且不留下 `.voyage/manifest.json`。
+
+---
+
+## 2026-08-17 · DEV-0002 · MK-101 · UPDATE
+
+- Status: implementation-complete; immutable-anchor verification pending
+- Baseline: `58d6dffe64b3224038c785c901137d23f84f8a95`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-1011 through ST-1019 complete; bootstrap drafts, scoped truth activation, explicit supersession, legacy migration, operational authorization gate, runtime anti-bypass validation, optional truth evidence, and adopted-registry identity checks implemented
+- Non-goals: no typed delivery evidence, state-machine reconciliation beyond MK-101, recovery four-bucket redesign, or extension-layer work
+- Risk: standard; bootstrap truth can no longer become authoritative without recorded User scope and real ledger readback
+- Dependencies: MK-000 and D-0002 complete; all MK-101 test-first records above satisfied
+- Acceptance gates: 98-test full regression, compileall, dogfood validate/truth status/recover, adopted-project forward CLI scenario, append-only planning check, and diff hygiene
+- Actual result: implementation complete; 98 passed, 0 failed, 0 skipped; compileall passed; dogfood is operational with six verified active truth sources; dogfood validate and recover passed; adopted-project bootstrap-to-operational-to-authorized forward scenario passed; `git diff --check` passed
+- Tests: ST-1011 through ST-1019 were defined and observed failing before their corresponding implementation; cumulative and full suites pass after implementation
+- Readback: dogfood ledger head is `evt-469b9c218d594ab0bd21c75dde697ca3`; migration and optional truth activations are append-only ledger evidence
+- Remaining issues: official `quick_validate.py` remains unknown because its external environment lacks PyYAML and dependency-install approval returned 403; equivalent Ruby YAML/frontmatter validation passed
+- Next safe action: commit the MK-101 implementation, rerun the complete acceptance set against that immutable commit, append DEV-0002 CLOSE with the commit anchor, then commit and push the close record before starting MK-102
