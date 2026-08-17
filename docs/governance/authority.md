@@ -2,7 +2,7 @@
 
 - Version: 0.1.0
 - Status: active
-- Authority: D-0001
+- Authority: D-0001, D-0002
 
 ## Permission loops
 
@@ -17,6 +17,15 @@ The four loops are scoped permissions, not permanent job titles.
 
 User is outside the loops and is the final authority for product direction,
 high-risk conflict, irreversible action, exception, and audit appeal.
+
+## Identity and trust boundary
+
+Ledger hashes and immutable references make local history tamper-evident, not
+tamper-proof. Actor IDs, loop labels, and recorded signatures are assertions by
+the local caller and are not cryptographically authenticated in v0.x. An actor
+with direct write access is inside the local trust boundary; VoyageSkill detects
+unsupported transitions and historical mutation but does not provide principal
+authentication against that actor.
 
 ## Required separation
 

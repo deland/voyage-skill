@@ -2,7 +2,17 @@
 
 - Version: 0.1.0
 - Status: active
-- Authority: D-0001
+- Authority: D-0001, D-0002
+
+## Runtime contract authority
+
+The Python core validator and event replay are the normative runtime contract.
+JSON Schema files are the versioned exchange contract for manifests,
+definitions, registries, and events. Executable consistency tests require all
+runtime-produced and repository dogfood instances to satisfy that exchange
+contract. If the two disagree, runtime behavior must fail safely and the
+contract drift must be resolved in one tested change; a Schema file alone does
+not silently alter runtime authority.
 
 ## Node types
 

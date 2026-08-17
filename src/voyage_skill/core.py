@@ -45,7 +45,12 @@ def utc_now() -> str:
 
 
 def parse_time(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if not isinstance(value, str):
+        raise ValueError("timestamp is not a string")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("timestamp has no timezone")
+    return parsed
 
 
 def canonical_json(value: Any) -> str:
@@ -320,9 +325,12 @@ def validate_hash_chain(events: list[dict[str, Any]]) -> list[str]:
             errors.append(f"event {index} missing fields: {', '.join(sorted(missing))}")
             continue
         event_id = event.get("event_id")
-        if event_id in seen:
+        if not isinstance(event_id, str) or not event_id:
+            errors.append(f"event {index} event_id is not a non-empty string")
+        elif event_id in seen:
             errors.append(f"event {index} repeats event ID {event_id}")
-        seen.add(event_id)
+        else:
+            seen.add(event_id)
         if event.get("prev_hash") != previous:
             errors.append(f"event {index} prev_hash does not match ledger head")
         claimed = event.get("hash")
@@ -336,11 +344,99 @@ def validate_hash_chain(events: list[dict[str, Any]]) -> list[str]:
             errors.append(f"event {index} has invalid risk {event.get('risk')}")
         if event.get("schema_version") != SCHEMA_VERSION:
             errors.append(f"event {index} has unsupported schema {event.get('schema_version')}")
+        for key in ("actor", "type", "subject"):
+            if not isinstance(event.get(key), str) or not event.get(key):
+                errors.append(f"event {index} {key} is not a non-empty string")
+        timestamp = event.get("timestamp")
+        try:
+            parse_time(timestamp)
+        except (TypeError, ValueError):
+            errors.append(f"event {index} timestamp is not a valid date-time")
         if not isinstance(event.get("payload"), dict):
             errors.append(f"event {index} payload is not an object")
         if not isinstance(event.get("evidence"), list) or not all(isinstance(item, str) for item in event.get("evidence", [])):
             errors.append(f"event {index} evidence is not a string array")
         previous = claimed
+    return errors
+
+
+def _duplicates(items: list[Any]) -> list[Any]:
+    result: list[Any] = []
+    for index, item in enumerate(items):
+        if item in items[:index] and item not in result:
+            result.append(item)
+    return result
+
+
+def _validate_graph_definition(graph: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    for key in ("node_types", "edge_types", "loops"):
+        items = graph.get(key)
+        if not isinstance(items, list) or not items:
+            errors.append(f"$.{key}: must be a non-empty array")
+            continue
+        duplicates = _duplicates(items)
+        if duplicates:
+            errors.append(f"$.{key}: uniqueItems contains duplicates {duplicates!r}")
+    loops = graph.get("loops")
+    if isinstance(loops, list):
+        for required_loop in ("execution", "quality", "governance", "audit"):
+            if required_loop not in loops:
+                errors.append(f"$.loops: contains requires {required_loop!r}")
+        invalid = [item for item in loops if item not in {"execution", "quality", "governance", "audit"}]
+        if invalid:
+            errors.append(f"$.loops: values are not in enum {invalid!r}")
+    return errors
+
+
+def _validate_gate_definition_data(gates: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    definitions = gates.get("gates")
+    if not isinstance(definitions, list):
+        return ["$.gates: must be an array"]
+    seen: set[str] = set()
+    required = {
+        "id": str,
+        "mandatory": bool,
+        "allow_skips": bool,
+        "required_loop": str,
+    }
+    for index, definition in enumerate(definitions):
+        path = f"$.gates[{index}]"
+        if not isinstance(definition, dict):
+            errors.append(f"{path}: must be an object")
+            continue
+        for key, expected_type in required.items():
+            if key not in definition:
+                errors.append(f"{path}.{key}: required property is missing")
+            elif not isinstance(definition[key], expected_type):
+                errors.append(f"{path}.{key}: has invalid type")
+        gate_id = definition.get("id")
+        if isinstance(gate_id, str):
+            if gate_id in seen:
+                errors.append(f"{path}.id: duplicate gate ID {gate_id}")
+            seen.add(gate_id)
+        if definition.get("required_loop") != "quality":
+            errors.append(f"{path}.required_loop: value is not in enum ['quality']")
+    return errors
+
+
+def _validate_event_data(events: list[dict[str, Any]]) -> list[str]:
+    errors: list[str] = []
+    for index, event in enumerate(events, 1):
+        if not isinstance(event, dict) or not isinstance(event.get("payload"), dict):
+            continue
+        if event.get("type") == "resource.claimed":
+            payload = event["payload"]
+            for key in ("resource_id", "lease_id", "work_id", "expires_at"):
+                if not isinstance(payload.get(key), str) or not payload.get(key):
+                    errors.append(f"event {index} $.payload.{key}: required non-empty string is missing")
+            expires_at = payload.get("expires_at")
+            if isinstance(expires_at, str) and expires_at:
+                try:
+                    parse_time(expires_at)
+                except (TypeError, ValueError):
+                    errors.append(f"event {index} $.payload.expires_at: value is not a valid date-time")
     return errors
 
 
@@ -360,6 +456,21 @@ def _initial_state() -> dict[str, Any]:
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise VoyageError(message)
+
+
+def _validated_counts(value: Any, *, context: str) -> dict[str, int]:
+    _require(isinstance(value, dict), f"{context} result requires counts")
+    keys = ("total", "passed", "failed", "skipped", "unknown")
+    for key in keys:
+        count = value.get(key)
+        _require(type(count) is int and count >= 0, f"{context} count {key} must be a non-negative integer")
+    counts = {key: value[key] for key in keys}
+    _require(counts["total"] > 0, f"{context} total must be positive")
+    _require(
+        counts["passed"] + counts["failed"] + counts["skipped"] + counts["unknown"] == counts["total"],
+        f"{context} counts do not add up",
+    )
+    return counts
 
 
 def _work(state: dict[str, Any], work_id: str) -> dict[str, Any]:
@@ -489,11 +600,22 @@ def replay_events(
             _require(bool(evidence), "quality verdict requires evidence")
             work["quality_actor"] = actor
             verdict = "pass" if event_type == "quality.passed" else "reject"
+            counts = _validated_counts(payload.get("counts"), context="quality")
+            if verdict == "pass":
+                _require(
+                    counts["failed"] == 0 and counts["skipped"] == 0 and counts["unknown"] == 0,
+                    "passing independent quality cannot contain failed, skipped, or unknown checks",
+                )
+            else:
+                _require(
+                    counts["failed"] > 0 or counts["unknown"] > 0,
+                    "rejected quality requires failed or unknown checks",
+                )
             state["gates"].setdefault(subject, {})["independent-quality"] = {
                 "verdict": verdict,
                 "anchor": anchor,
                 "actor": actor,
-                "counts": payload.get("counts", {"total": 1, "passed": int(verdict == "pass"), "failed": int(verdict == "reject"), "skipped": 0, "unknown": 0}),
+                "counts": counts,
             }
             work["status"] = "quality-passed" if verdict == "pass" else "rejected"
 
@@ -506,11 +628,7 @@ def replay_events(
             _require(bool(evidence), "gate result requires evidence")
             required_loop = gate_defs[gate_id].get("required_loop", "quality")
             _require(loop == required_loop, f"gate {gate_id} requires {required_loop} loop")
-            counts = payload.get("counts")
-            _require(isinstance(counts, dict), "gate result requires counts")
-            for key in ("total", "passed", "failed", "skipped", "unknown"):
-                _require(isinstance(counts.get(key), int) and counts[key] >= 0, f"gate count {key} must be a non-negative integer")
-            _require(counts["passed"] + counts["failed"] + counts["skipped"] + counts["unknown"] == counts["total"], "gate counts do not add up")
+            counts = _validated_counts(payload.get("counts"), context="gate")
             verdict = "pass" if counts["failed"] == 0 and counts["unknown"] == 0 and (gate_defs[gate_id].get("allow_skips", False) or counts["skipped"] == 0) else "fail"
             state["gates"].setdefault(subject, {})[gate_id] = {"verdict": verdict, "anchor": anchor, "actor": actor, "counts": counts}
 
@@ -807,9 +925,9 @@ def validate_project(paths: ProjectPaths) -> list[str]:
             errors.append("truth registry sources must be an array")
         else:
             active_by_domain: dict[str, list[str]] = {}
-            for source in sources:
+            for index, source in enumerate(sources):
                 if not isinstance(source, dict):
-                    errors.append("truth registry source must be an object")
+                    errors.append(f"$.sources[{index}]: truth registry source must be an object")
                     continue
                 if source.get("status") == "active":
                     path_value = source.get("path")
@@ -833,9 +951,7 @@ def validate_project(paths: ProjectPaths) -> list[str]:
         graph = load_json(paths.graph)
         if graph.get("schema_version") != SCHEMA_VERSION:
             errors.append(f"unsupported graph schema: {graph.get('schema_version')}")
-        for key in ("node_types", "edge_types", "loops"):
-            if not isinstance(graph.get(key), list) or not graph[key]:
-                errors.append(f"graph requires non-empty {key}")
+        errors.extend(_validate_graph_definition(graph))
 
         resources = load_json(paths.resources)
         if resources.get("schema_version") != SCHEMA_VERSION:
@@ -863,13 +979,16 @@ def validate_project(paths: ProjectPaths) -> list[str]:
         gates = load_json(paths.gates)
         if gates.get("schema_version") != SCHEMA_VERSION:
             errors.append(f"unsupported gates schema: {gates.get('schema_version')}")
-        _gate_definitions(gates)
+        errors.extend(_validate_gate_definition_data(gates))
         events = load_events(paths.ledger)
         errors.extend(validate_hash_chain(events))
+        errors.extend(_validate_event_data(events))
         if not errors:
             replay_events(events, resources=resources, gates=gates)
     except VoyageError as exc:
         errors.append(str(exc))
+    except (KeyError, TypeError, ValueError) as exc:
+        errors.append(f"invalid project data: {type(exc).__name__}: {exc}")
     return errors
 
 
@@ -888,7 +1007,10 @@ def active_leases(state: dict[str, Any]) -> list[dict[str, Any]]:
         if not lease["active"]:
             continue
         item = deepcopy(lease)
-        item["expired"] = parse_time(lease["expires_at"]) <= now
+        try:
+            item["expired"] = parse_time(lease["expires_at"]) <= now
+        except (KeyError, TypeError, ValueError) as exc:
+            raise VoyageError(f"lease {lease.get('lease_id', '<unknown>')} expires_at is not a valid date-time") from exc
         item["recovery_required"] = item["expired"] and lease["stateful"]
         result.append(item)
     return sorted(result, key=lambda item: item["lease_id"])

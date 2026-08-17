@@ -44,10 +44,10 @@
       "authority": "user"
     },
     {
-      "id": "baseline-decision",
+      "id": "decision-log",
       "domain": "decisions",
-      "path": "docs/decisions/D-0001-v0.1-baseline.md",
-      "version": "1",
+      "path": "docs/decisions/index.md",
+      "version": "2",
       "status": "active",
       "authority": "user"
     }

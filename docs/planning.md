@@ -444,3 +444,122 @@ active → retired | superseded
 - Remaining issues:
 - Next safe action:
 ```
+
+---
+
+## 2026-08-17 · DEV-0001 · MK-000 · START
+
+- Status: in-progress
+- Baseline: `e971047c99ceeded8d7bfadf47cd1427711bf5e0`
+- Anchor: pending
+- Supersedes: none
+- Scope: 契约决策、Schema 守卫、dogfood 自检、损坏输入结构化错误、core 层质量计数校验
+- Non-goals: bootstrap 激活流程、类型化证据、状态机收敛、恢复四分类、图查询
+- Risk: standard；涉及验证器和正式契约，但不涉及外部系统或不可逆数据
+- Dependencies: PLAN-0001、D-0001、当前 v0.1 账本兼容性
+- Acceptance gates: 以下测试矩阵全部通过；全量回归无失败或跳过；Voyage validate/recover 通过；独立验证针对最终提交
+- Actual result: pending
+- Tests: defined before implementation, not run yet
+- Readback: pending
+- Remaining issues: pending
+- Next safe action: 先添加测试并确认它们在当前实现上按预期失败
+
+### DEV-0001 子任务与测试矩阵
+
+#### ST-0001 · Schema 与正式实例一致性
+
+实现前测试用例：
+
+1. `schema_manifest_accepts_initialized_project`：init 产出的 manifest 通过 manifest schema。
+2. `schema_graph_accepts_initialized_project`：init 产出的 graph 通过 graph schema，并包含四层 loop。
+3. `schema_resources_accepts_initialized_project`：资源定义通过 resources schema。
+4. `schema_gates_accepts_initialized_project`：门禁定义通过 gates schema。
+5. `schema_events_accept_all_initialized_ledger_events`：账本每条事件通过 event schema。
+6. `schema_truth_registry_accepts_dogfood_registry`：仓库 active truth registry 通过 schema。
+7. `schema_rejects_unknown_top_level_property`：`additionalProperties: false` 生效。
+8. `schema_rejects_missing_required_field`：缺少 required 字段时失败并给出 JSON path。
+9. `schema_rejects_invalid_enum_pattern_and_const`：枚举、正则和 const 均被执行。
+10. `schema_unique_and_contains_are_enforced`：graph 的 uniqueItems 和四 loop contains 被执行。
+
+预期当前失败：dogfood registry 含 schema 未声明的 `updated_at`；运行时代码未执行正式 Schema。
+
+#### ST-0002 · Dogfood 与契约防漂移
+
+实现前测试用例：
+
+1. `repository_root_is_a_valid_voyage_project`：对仓库根运行 `validate_project`，必须零错误。
+2. `all_active_truth_sources_exist`：注册表中每个 active source 均存在。
+3. `one_active_truth_source_per_domain`：同领域不能有两个 active source。
+4. `schema_files_are_exercised_by_tests`：六份 schema 均至少校验一个有效实例和一个无效实例。
+5. `skill_frontmatter_and_openai_metadata_agree`：名称与默认 prompt 引用保持一致。
+6. `planning_is_registered_as_active_truth`：追加式 planning 文件可由 registry 发现。
+
+预期当前失败：缺少仓库级 dogfood 测试与元数据一致性守卫。
+
+#### ST-0003 · 损坏输入必须产生结构化错误
+
+实现前测试用例：
+
+1. `validate_reports_missing_lease_expiry`：重算哈希后的 resource.claimed 缺 `expires_at`，返回错误列表而非 traceback。
+2. `validate_reports_invalid_lease_timestamp`：非法 RFC3339 时间在 validate/recover 中返回确定性错误。
+3. `validate_reports_wrong_event_payload_shape`：payload 形状错误时不泄漏 `KeyError`/`TypeError`。
+4. `validate_reports_wrong_truth_source_shape`：registry 中 source 非对象时返回带路径错误。
+5. `validate_reports_bad_gate_definition`：gate 缺 required 字段时失败。
+6. `validate_reports_bad_graph_definition`：graph 缺四层 loop 或存在重复类型时失败。
+7. `cli_validate_never_prints_traceback_for_project_data_error`：CLI 返回非零与 JSON 错误，不输出 Python traceback。
+
+预期当前失败：若事件通过基础哈希检查但破坏 replay 假设，`validate_project` 可能抛裸异常。
+
+#### ST-0004 · Quality 计数必须由 core 强制
+
+实现前测试用例：
+
+1. `core_rejects_quality_counts_that_do_not_sum`：绕过 CLI 调用 append_event 也不能写入不自洽计数。
+2. `core_rejects_negative_quality_counts`：任一负数失败。
+3. `core_rejects_non_integer_quality_counts`：布尔、字符串或浮点失败。
+4. `core_rejects_passing_quality_with_failed_unknown_or_skipped`：pass 不允许 failed/unknown/skip。
+5. `core_accepts_complete_passing_quality_counts`：完整 3/3 通过。
+6. `core_accepts_complete_rejection_counts`：reject 必须至少包含 failed 或 unknown，且总数自洽。
+7. `failed_append_does_not_advance_ledger_head`：被拒绝事件不会写入账本。
+
+预期当前失败：quality 统计只在 CLI 层严格校验，core 直接调用可以绕过。
+
+#### ST-0005 · 决策与正式文档
+
+实现前测试用例：
+
+1. `decision_d0002_is_registered_and_active`：新契约决策进入 decisions 真源或由现有 decisions 域发现。
+2. `authority_documents_tamper_evident_boundary`：正式治理合同明确 actor 无密码学认证。
+3. `system_contract_names_runtime_contract_authority`：正式系统合同明确 Python validator 与 JSON Schema 的关系。
+4. `planning_history_remains_append_only`：本次开发只在 planning 尾部追加 START/CLOSE，不修改 PLAN-0001。
+
+预期当前失败：缺少 D-0002，信任边界与 Schema 权威关系未正式化。
+
+### DEV-0001 测试执行顺序
+
+1. 添加上述测试，不改实现；运行目标测试，保存预期失败证据。
+2. 按 ST-0001 → ST-0005 顺序逐项实现；每完成一个子任务立即运行其目标测试。
+3. 每个目标测试通过后运行此前全部目标测试，防止子任务间回归。
+4. 全部实现完成后运行完整测试套件，报告 pass/fail/skip/unknown。
+5. 运行仓库 dogfood `validate` 与 `recover`。
+6. 对最终不可变提交执行独立前向验证。
+7. 在本文末尾追加 `DEV-0001 CLOSE`，不得修改本 START 记录。
+
+---
+
+## 2026-08-17 · DEV-0001 · MK-000 · UPDATE
+
+- Status: implementation-complete; awaiting immutable Git anchor
+- Baseline: `e971047c99ceeded8d7bfadf47cd1427711bf5e0`
+- Anchor: pending Git write permission
+- Supersedes: none
+- Scope: ST-0001 through ST-0005 implemented as defined in DEV-0001 START
+- Non-goals: unchanged
+- Risk: standard; no external or irreversible project action performed
+- Dependencies: Git metadata write required to create immutable review anchor
+- Acceptance gates: implementation gates passed; immutable-anchor and push gates pending
+- Actual result: zero-dependency Schema subset added; dogfood drift guards added; malformed project data is structured; quality counts are core-enforced; D-0002 and formal trust/contract authority are active
+- Tests: 53 pass, 0 fail, 0 skip; dogfood validate/recover pass; compileall pass; clean-project forward lifecycle pass; invalid quality counts rejected before ledger advance
+- Readback: final forward project recovered as `closed` with next action `none`
+- Remaining issues: official `quick_validate.py` is unknown because its environment lacks PyYAML and temporary dependency installation was denied by approval-service 403; equivalent YAML/frontmatter validation passed
+- Next safe action: User creates the implementation commit in the development worktree, then development appends CLOSE against that immutable commit and reruns final gates
