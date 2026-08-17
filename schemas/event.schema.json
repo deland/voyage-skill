@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voyage-skill.local/schemas/event.schema.json",
+  "title": "VoyageSkill ledger event",
+  "type": "object",
+  "required": ["schema_version", "event_id", "timestamp", "actor", "loop", "type", "subject", "risk", "payload", "evidence", "prev_hash", "hash"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "event_id": {"type": "string", "pattern": "^evt-[a-f0-9]+$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "actor": {"type": "string", "minLength": 1},
+    "loop": {"enum": ["execution", "quality", "governance", "audit", "user", "system"]},
+    "type": {"type": "string", "minLength": 1},
+    "subject": {"type": "string", "minLength": 1},
+    "risk": {"enum": ["light", "standard", "strict"]},
+    "caused_by": {"type": ["string", "null"]},
+    "payload": {"type": "object"},
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "anchor": {"type": ["string", "null"]},
+    "authorization": {"type": ["string", "null"]},
+    "prev_hash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": false
+}

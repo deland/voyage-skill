@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voyage-skill.local/schemas/resources.schema.json",
+  "title": "VoyageSkill resources",
+  "type": "object",
+  "required": ["schema_version", "resources"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "mode"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "type": {"enum": ["file", "account", "port", "environment", "session", "window", "quota"]},
+          "mode": {"enum": ["exclusive", "shared-read", "serialized", "rebuildable"]},
+          "conflict_key": {"type": ["string", "integer"]},
+          "risk": {"enum": ["light", "standard", "strict"]},
+          "probe": {"type": "object"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

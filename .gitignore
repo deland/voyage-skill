@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.voyage/ledger/events.jsonl.lock
+.codebuddy/settings.local.json

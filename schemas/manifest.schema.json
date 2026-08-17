@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voyage-skill.local/schemas/manifest.schema.json",
+  "title": "VoyageSkill project manifest",
+  "type": "object",
+  "required": ["schema_version", "project_id", "truth_registry", "graph", "resources", "gates", "ledger", "evidence"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "project_id": {"type": "string", "minLength": 1, "pattern": "^\\S+$"},
+    "coordination_boundary": {"const": "single-repository-single-machine"},
+    "truth_registry": {"type": "string", "minLength": 1},
+    "graph": {"type": "string", "minLength": 1},
+    "resources": {"type": "string", "minLength": 1},
+    "gates": {"type": "string", "minLength": 1},
+    "ledger": {"type": "string", "minLength": 1},
+    "evidence": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

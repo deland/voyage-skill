@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voyage-skill.local/schemas/graph.schema.json",
+  "title": "VoyageSkill graph definition",
+  "type": "object",
+  "required": ["schema_version", "node_types", "edge_types", "loops"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "node_types": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "edge_types": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "loops": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["execution", "quality", "governance", "audit"]},
+      "allOf": [{"contains": {"const": "execution"}}, {"contains": {"const": "quality"}}, {"contains": {"const": "governance"}}, {"contains": {"const": "audit"}}]
+    }
+  },
+  "additionalProperties": false
+}

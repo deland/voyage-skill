@@ -1,0 +1,4 @@
+interface:
+  display_name: "VoyageSkill"
+  short_description: "Govern verifiable multi-agent project operations"
+  default_prompt: "Use $voyage-skill to recover this project from its sources of truth and identify the next safe action."

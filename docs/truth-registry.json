@@ -1,0 +1,53 @@
+{
+  "schema_version": "0.1.0",
+  "project": "voyage-skill",
+  "updated_at": "2026-08-13",
+  "sources": [
+    {
+      "id": "product-contract",
+      "domain": "product",
+      "path": "docs/product/contract.md",
+      "version": "0.1.0",
+      "status": "active",
+      "authority": "user-approved-baseline"
+    },
+    {
+      "id": "governance-authority",
+      "domain": "governance",
+      "path": "docs/governance/authority.md",
+      "version": "0.1.0",
+      "status": "active",
+      "authority": "user-approved-baseline"
+    },
+    {
+      "id": "system-graph",
+      "domain": "system",
+      "path": "docs/system/graph.md",
+      "version": "0.1.0",
+      "status": "active",
+      "authority": "user-approved-baseline"
+    },
+    {
+      "id": "operations-runbook",
+      "domain": "operations",
+      "path": "docs/operations/runbook.md",
+      "version": "0.1.0",
+      "status": "active",
+      "authority": "user-approved-baseline"
+    },
+    {
+      "id": "baseline-decision",
+      "domain": "decisions",
+      "path": "docs/decisions/D-0001-v0.1-baseline.md",
+      "version": "1",
+      "status": "active",
+      "authority": "user"
+    }
+  ],
+  "non_authoritative": [
+    "docs/research/",
+    "docs/design/",
+    "conversation memory",
+    "worker summaries"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voyage-skill.local/schemas/gates.schema.json",
+  "title": "VoyageSkill gates",
+  "type": "object",
+  "required": ["schema_version", "gates"],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "mandatory", "allow_skips", "required_loop"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "mandatory": {"type": "boolean"},
+          "allow_skips": {"type": "boolean"},
+          "required_loop": {"enum": ["quality"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
