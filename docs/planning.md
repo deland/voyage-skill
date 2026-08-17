@@ -777,3 +777,22 @@ active → retired | superseded
 - Readback: dogfood ledger head is `evt-469b9c218d594ab0bd21c75dde697ca3`; migration and optional truth activations are append-only ledger evidence
 - Remaining issues: official `quick_validate.py` remains unknown because its external environment lacks PyYAML and dependency-install approval returned 403; equivalent Ruby YAML/frontmatter validation passed
 - Next safe action: commit the MK-101 implementation, rerun the complete acceptance set against that immutable commit, append DEV-0002 CLOSE with the commit anchor, then commit and push the close record before starting MK-102
+
+---
+
+## 2026-08-17 · DEV-0002 · MK-101 · CLOSE
+
+- Status: complete
+- Baseline: `58d6dffe64b3224038c785c901137d23f84f8a95`
+- Anchor: `b1256896c941e2e8f67f77c06d8fe234b5739cdf`
+- Supersedes: none
+- Scope: bootstrap truth activation and legacy migration safety boundary delivered as specified by ST-1011 through ST-1019
+- Non-goals: unchanged; typed evidence is MK-102, state-machine reconciliation is MK-103, recovery four-bucket output is MK-104, and extension layering is MK-105
+- Risk: standard; accepted after independent readback from the immutable implementation anchor
+- Dependencies: MK-000 complete; D-0002 active; implementation anchor exists locally
+- Acceptance gates: complete full regression, compilation, dogfood validation/status/recovery, append-only planning enforcement, adopted-project forward scenario, and immutable diff hygiene
+- Actual result: PASS; immutable anchor rerun produced 98 passed, 0 failed, 0 skipped; compileall passed with cache rooted under `/tmp`; `voyage validate` returned no errors; `truth status` reported operational with no missing domains or unverified active sources; `recover` reported the same ledger head and operational stage; `git diff HEAD^ HEAD --check` passed
+- Tests: all ST-1011 through ST-1019 cases and all pre-existing regression tests passed against the exact anchor above
+- Readback: implementation commit contains 14 changed files, including the new bootstrap test suite and support helpers; dogfood ledger head remains `evt-469b9c218d594ab0bd21c75dde697ca3`
+- Remaining issues: official `quick_validate.py` is still unknown because its external environment lacks PyYAML and approval infrastructure returned 403; equivalent repository metadata/frontmatter validation passed before the anchor and no related files changed afterward
+- Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote branch contains both the implementation anchor and close commit, then start MK-102 with a new START record and failing typed-evidence tests
