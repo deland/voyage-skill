@@ -796,3 +796,223 @@ active → retired | superseded
 - Readback: implementation commit contains 14 changed files, including the new bootstrap test suite and support helpers; dogfood ledger head remains `evt-469b9c218d594ab0bd21c75dde697ca3`
 - Remaining issues: official `quick_validate.py` is still unknown because its external environment lacks PyYAML and approval infrastructure returned 403; equivalent repository metadata/frontmatter validation passed before the anchor and no related files changed afterward
 - Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote branch contains both the implementation anchor and close commit, then start MK-102 with a new START record and failing typed-evidence tests
+
+---
+
+## 2026-08-17 · DEV-0003 · MK-102 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `73b460d45d5554c127016c2022db6814e7a01d54`
+- Anchor: pending
+- Supersedes: none
+- Scope: versioned typed evidence, content-addressed storage, five minimum validators, append-only verification records, CLI read/write/readback, and typed enforcement for delivery, independent quality, and gate results
+- Non-goals: no MK-103 lifecycle reconciliation, MK-104 four-bucket recovery redesign, remote artifact download, signature/PKI, arbitrary plugin validators, background freshness monitor, or extension-layer decomposition
+- Risk: standard; changes the trust boundary for newly recorded delivery evidence while preserving legacy ledger readability
+- Dependencies: MK-000 and MK-101 complete; content-addressed evidence directory already registered by the manifest
+- Acceptance gates: all tests below must be written before implementation and observed failing; each validator subtask must pass its target tests plus cumulative evidence tests; final full regression, compileall, dogfood validation/recovery, CLI forward scenario, schema coverage, and diff hygiene must pass
+- Actual result: pending
+- Tests: ST-1021 through ST-1028 defined below
+- Readback: local and remote branch both resolve to `73b460d45d5554c127016c2022db6814e7a01d54`; worktree was clean at START
+- Remaining issues: evidence objects, validators, verification events, and typed gate enforcement do not yet exist
+- Next safe action: add all MK-102 tests without product changes, run them to capture the expected red baseline, then implement ST-1021 first
+
+### DEV-0003 固定接口与兼容边界
+
+1. Evidence ID 使用 `sha256:<64-hex>`，正文以 canonical JSON 存放在 `.voyage/evidence/sha256/<digest>.json`。
+2. 证据正文统一包含 `kind`、`version`、`claim`、`locator`、`observed_at`、`producer`；kind-specific 数据放在 `locator`，不得依赖会话记忆补全。
+3. 验证结果为 `valid`、`invalid` 或 `unknown`，每次显式记录/复验追加 `evidence.verified` 事件，包含验证器版本、验证时间、状态和原因。
+4. `work.delivered` 的 anchor 必须是有效 `git-commit` 或 `artifact-digest`；delivery、quality 和 gate 的 evidence 必须是当前有效的类型化 evidence ID；quality/gate 继续严格绑定同一 anchor。
+5. 已存在 ledger 的自由字符串保持可重放并标记为 legacy；从 DEV-0003 起新追加的 delivery、quality 和 gate 不得用 legacy 字符串满足门禁。
+6. `runtime-readback` 过期返回 `unknown`；unknown 与 invalid 均不能满足强制门禁。
+7. Evidence 文件属于声明，验证器必须在消费时重新读回真实 Git 对象、文件摘要、原始命令输出、时间或 User 决定，不能只信历史验证事件。
+
+### ST-1021 · 内容寻址存储与通用合同
+
+实现前测试用例：
+
+1. `evidence_is_stored_by_canonical_sha256_and_deduplicated`：相同正文产生同一 ID 和单一文件。
+2. `tampered_evidence_document_is_rejected_by_digest_readback`：内容与路径摘要不一致时复验为 invalid。
+3. `evidence_requires_versioned_common_fields`：缺 kind/version/claim/locator/observed_at/producer 或错误类型必须拒绝。
+4. `evidence_verification_appends_versioned_ledger_record`：显式记录产生含 validator version、时间、状态、原因的追加事件。
+
+### ST-1022 · Git commit validator
+
+实现前测试用例：
+
+1. `git_commit_accepts_existing_full_commit_sha`：项目内真实仓库的完整 commit SHA 可读并验证为 valid。
+2. `git_commit_rejects_short_or_missing_revision`：短 SHA 和不存在的完整 SHA 均为 invalid。
+3. `git_commit_rejects_repository_escape_or_non_repository`：仓库定位不得逃逸项目根，且目标必须是 Git repository。
+4. `new_delivery_rejects_legacy_or_nonexistent_commit_anchor`：`commit:abc` 和不存在的 typed Git anchor 都不能交付。
+
+### ST-1023 · Artifact digest validator
+
+实现前测试用例：
+
+1. `artifact_digest_recomputes_sha256`：现存项目文件的允许算法和真实摘要为 valid。
+2. `artifact_digest_detects_changed_artifact`：存证后文件修改使复验 invalid，不能继续满足门禁。
+3. `artifact_digest_rejects_escape_directory_and_unsupported_algorithm`：路径逃逸、目录目标和非 sha256 算法拒绝。
+
+### ST-1024 · Command result validator
+
+实现前测试用例：
+
+1. `command_result_requires_argv_cwd_exit_code_counts_and_time`：命令、目录、退出码、完整统计、观测时间缺一不可。
+2. `command_result_verifies_raw_stdout_and_stderr_artifacts`：stdout/stderr 必须指向项目内原始制品并匹配 bytes 与 sha256。
+3. `command_result_rejects_inconsistent_counts_or_passing_claim`：分类总和错误，或 passing claim 含 failed/skipped/unknown 时 invalid。
+4. `command_result_detects_raw_output_tampering`：原始输出改变后复验 invalid。
+
+### ST-1025 · Runtime readback validator
+
+实现前测试用例：
+
+1. `runtime_readback_accepts_fresh_complete_observation`：环境 ID、目标版本、关键字段、观测时间和新鲜期完整时 valid。
+2. `runtime_readback_expires_to_unknown`：超过 max_age_seconds 后必须为 unknown，不得继续作为 pass。
+3. `runtime_readback_rejects_missing_identity_future_time_or_empty_fields`：身份/版本/字段缺失或未来时间为 invalid。
+
+### ST-1026 · User decision validator
+
+实现前测试用例：
+
+1. `user_decision_evidence_validates_exact_action_project_and_source_scope`：真实 User-loop 决定覆盖精确范围时 valid。
+2. `user_decision_evidence_rejects_missing_non_user_or_scope_mismatch`：不存在、非 User loop或 action/project/source 不匹配时 invalid。
+3. `revoked_user_decision_evidence_becomes_invalid`：追加 User 撤销后，历史证据实时复验为 invalid。
+
+### ST-1027 · 强制门禁集成与 legacy 兼容
+
+实现前测试用例：
+
+1. `typed_delivery_quality_and_gate_complete_lifecycle`：有效 anchor 与独立 command evidence 完成 delivery、quality、gate、accept 和 close。
+2. `quality_and_gate_revalidate_evidence_at_consumption_time`：证据制品在 delivery 后被篡改，quality/gate 必须拒绝。
+3. `repair_anchor_invalidates_old_quality_conclusion`：新交付 anchor 使旧 anchor 的质量结论不能用于 acceptance。
+4. `executor_still_cannot_sign_final_quality_with_typed_evidence`：类型化证据不改变执行/质量分离。
+5. `legacy_ledger_replays_but_legacy_refs_cannot_satisfy_new_events`：现有自由字符串账本仍 validate，新事件门禁拒绝 legacy refs。
+
+### ST-1028 · CLI、Schema、文档与 dogfood
+
+实现前测试用例：
+
+1. `cli_evidence_record_show_and_verify_are_structured`：CLI 可从 JSON 文件记录、按 ID 读取并实时复验，输出稳定字段。
+2. `evidence_schema_accepts_all_five_kinds_and_rejects_bad_common_contract`：正式 schema 覆盖五类对象和通用必填字段。
+3. `event_schema_accepts_evidence_verification_events`：新增验证事件保持 ledger schema 可验证。
+4. `skill_and_runbook_document_typed_evidence_protocol`：Skill 只提示验证入口，runbook 承载记录、复验、legacy 与 freshness 细节。
+5. `dogfood_repository_remains_valid_with_legacy_history`：仓库自身旧 ledger 不被静默升级，但 validate/recover 继续通过。
+
+---
+
+## 2026-08-17 · DEV-0003 · MK-102 · UPDATE
+
+- Status: in-progress; red baseline captured
+- Baseline: `73b460d45d5554c127016c2022db6814e7a01d54`
+- Anchor: pending
+- Supersedes: none
+- Scope: all ST-1021 through ST-1028 tests added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0003 START test matrix
+- Acceptance gates: MK-102 module must fail for missing typed-evidence behavior before implementation
+- Actual result: expected FAIL; 31 tests ran, 2 existing compatibility readbacks passed, remaining cases failed or errored because evidence APIs, validators, schema, CLI, docs, revocation, and typed gate enforcement are absent; legacy `commit:abc` was still accepted
+- Tests: `PYTHONPATH=src python3 -B -m unittest tests.test_evidence -v`
+- Readback: failures directly expose the planned gaps rather than unrelated fixture or import failures; temporary Git fixtures initialized successfully
+- Remaining issues: all ST-1021 through ST-1028 implementation work remains
+- Next safe action: implement ST-1021 common contract, canonical store, digest readback, and append-only verification event; run EvidenceStorageTests before proceeding
+
+---
+
+## 2026-08-17 · DEV-0003 · MK-102 · UPDATE
+
+- Status: in-progress; ST-1021 through ST-1028 green, cold-start hardening required
+- Baseline: `73b460d45d5554c127016c2022db6814e7a01d54`
+- Anchor: pending
+- Supersedes: none
+- Scope: add ST-1029 so project validation re-reads content-addressed evidence and facts already consumed by typed transitions
+- Non-goals: no recovery four-bucket presentation or background monitoring
+- Risk: standard; without this check, a later evidence/artifact mutation can evade cold-start validation even though live append paths revalidate
+- Dependencies: ST-1021 through ST-1028 target tests pass; 31/31 MK-102 tests pass; 26/26 adapted legacy core/quality/CLI tests pass
+- Acceptance gates: tests below fail before implementation, then pass with full MK-102 and repository regression
+- Actual result: pending
+- Tests: defined below before implementation
+- Readback: current `validate_project` checks ledger hashes and state transitions but does not resolve typed evidence IDs after replay
+- Remaining issues: cold-start integrity and consumed-evidence readback gap
+- Next safe action: add ST-1029 tests, capture red, then add deterministic validation without treating unused invalid/unknown evidence claims as project corruption
+
+### ST-1029 · 冷启动证据完整性与消费事实读回
+
+实现前测试用例：
+
+1. `validate_detects_tampered_content_addressed_document`：任何 verification event 指向的正文摘要不匹配时项目 invalid。
+2. `validate_rechecks_evidence_consumed_by_historical_transition`：交付/质量/gate 已消费的制品或原始输出改变后，冷启动 validate 报 invalid/unknown。
+3. `validate_allows_recorded_invalid_or_unknown_evidence_when_unused`：仅记录但未用于强制 transition 的 invalid/unknown claim 不污染项目状态。
+4. `validate_detects_missing_document_for_verification_event`：验证事件引用的 evidence 正文丢失时项目 invalid。
+
+---
+
+## 2026-08-17 · DEV-0003 · MK-102 · UPDATE
+
+- Status: in-progress; ST-1029 green, acceptance boundary hardening required
+- Baseline: `73b460d45d5554c127016c2022db6814e7a01d54`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-1030 revalidates the current delivery and mandatory gate evidence at accept and close
+- Non-goals: no historical verdict deletion and no global block on repair transitions
+- Risk: standard; cached pass state must not outlive the evidence it claims to prove
+- Dependencies: ST-1029 passes 4/4
+- Acceptance gates: tests below fail before implementation, then pass without preventing rejected work from creating a new delivery anchor
+- Actual result: pending
+- Tests: defined below before implementation
+- Readback: quality/gate state currently stores anchor and counts but not evidence IDs, so accept cannot re-read their facts
+- Remaining issues: acceptance and closure can currently rely on a stale cached verdict
+- Next safe action: add ST-1030 tests, capture red, retain evidence refs in derived state, and revalidate only the current acceptance path
+
+### ST-1030 · Accept/close 当前证据复验
+
+实现前测试用例：
+
+1. `acceptance_revalidates_current_delivery_and_gate_evidence`：quality pass 后证据制品改变，accept 必须拒绝。
+2. `closure_revalidates_accepted_delivery_and_gate_evidence`：accept 后、close 前证据改变，close 必须拒绝。
+3. `stale_historical_evidence_does_not_block_repair_with_new_anchor`：rejected attempt 的旧证据失效不能阻止 start/new delivery，只有当前 acceptance path 受约束。
+
+---
+
+## 2026-08-17 · DEV-0003 · MK-102 · UPDATE
+
+- Status: in-progress; final authorization consistency hardening
+- Baseline: `73b460d45d5554c127016c2022db6814e7a01d54`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-1031 makes decision revocation effective at every existing authorization consumer, not only the new user-decision validator
+- Non-goals: no generalized decision lifecycle beyond recorded/revoked
+- Risk: standard; a revoked decision must not retain authority through a legacy direct-reference path
+- Dependencies: ST-1030 passes 3/3; full repository regression passes 136/136 before ST-1031
+- Acceptance gates: tests below fail before implementation, then pass with all 136 prior tests
+- Actual result: pending
+- Tests: defined below before implementation
+- Readback: `_require_decision_scope` and strict work/resource/resume checks currently test membership only and ignore the new revoked flag
+- Remaining issues: authorization consumers disagree with typed user-decision verification after revocation
+- Next safe action: add ST-1031 tests, capture red, centralize active-decision checks, rerun full regression
+
+### ST-1031 · 撤销决定的全路径一致性
+
+实现前测试用例：
+
+1. `revoked_decision_cannot_authorize_strict_work`：strict work 不得引用已撤销 User 决定。
+2. `revoked_scoped_decision_cannot_activate_truth`：truth activate 的 action/project/source 全覆盖也不能绕过撤销。
+3. `revoked_decision_cannot_resume_or_claim_strict_resource`：resume 和 strict resource 消费点同样拒绝撤销决定。
+
+---
+
+## 2026-08-17 · DEV-0003 · MK-102 · UPDATE
+
+- Status: implementation-complete; immutable-anchor verification pending
+- Baseline: `73b460d45d5554c127016c2022db6814e7a01d54`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-1021 through ST-1031 complete; content-addressed typed evidence, five live validators, verification events, CLI/schema/docs, mandatory transition enforcement, cold-start integrity, accept/close revalidation, legacy read compatibility, and decision-revocation consistency implemented
+- Non-goals: MK-103 lifecycle/schema convergence beyond evidence contracts, MK-104 four-bucket recovery presentation, signatures, remote evidence, validator plugins, and background freshness monitoring remain deferred
+- Risk: standard; newly appended delivery, quality, and gate transitions now require real typed facts while existing free-form ledger history remains readable but untrusted
+- Dependencies: MK-000 and MK-101 complete; all DEV-0003 test-first records satisfied
+- Acceptance gates: 139-test full regression, compileall, dogfood validate/recover, evidence CLI forward read/write/readback, schema coverage, append-only planning enforcement, and diff hygiene
+- Actual result: PASS before commit; 139 passed, 0 failed, 0 skipped; compileall passed with cache under `/tmp`; dogfood validate returned no errors and recover remained operational at ledger head `evt-469b9c218d594ab0bd21c75dde697ca3`; `git diff --check` passed
+- Tests: all ST-1021 through ST-1031 cases were defined before their fixes; initial MK-102 run captured 31-test red baseline; ST-1029, ST-1030, and ST-1031 each captured independent red before green; legacy core/quality/CLI fixtures were migrated to real typed evidence without a product bypass
+- Readback: only negative tests and planning text retain `commit:abc`; Git validator requires exact repository root and full readable SHA; artifact/command facts are recomputed; expired runtime is unknown; User scope and revocation are live-read; accept/close revalidate the current path
+- Remaining issues: official `quick_validate.py` remains unknown because its external environment lacks PyYAML and approval infrastructure previously returned 403; equivalent repository schema/frontmatter tests pass
+- Next safe action: commit the MK-102 implementation, rerun all 139 tests and dogfood gates against the immutable commit, append DEV-0003 CLOSE with its SHA, then commit and push the close record before MK-103

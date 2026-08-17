@@ -9,7 +9,7 @@ from pathlib import Path
 
 from voyage_skill.core import load_json, project_paths
 
-from tests.support import reviewed_contracts
+from tests.support import reviewed_contracts, typed_artifact_anchor, typed_command_evidence
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -49,6 +49,9 @@ class VoyageCliTests(unittest.TestCase):
         )
         for source_id in source_ids:
             self.run_cli("truth", "activate", source_id, "--decision", "USER-BOOTSTRAP", "--actor", "gov")
+        self.anchor = typed_artifact_anchor(paths, name="cli-delivery")
+        self.execution_evidence = typed_command_evidence(paths, name="cli-execution", producer="dev")
+        self.quality_evidence = typed_command_evidence(paths, name="cli-quality", producer="qa")
 
     def test_cli_end_to_end_and_recovery(self) -> None:
         self.init_operational()
@@ -56,8 +59,8 @@ class VoyageCliTests(unittest.TestCase):
         self.run_cli("work", "create", "W-1", "--title", "CLI flow", "--scope", "temporary test project", "--acceptance", "works", "--actor", "gov")
         self.run_cli("work", "authorize", "W-1", "--actor", "gov")
         self.run_cli("work", "start", "W-1", "--actor", "dev")
-        self.run_cli("work", "deliver", "W-1", "--anchor", "commit:abc", "--evidence", "self-test", "--actor", "dev")
-        self.run_cli("work", "quality", "W-1", "--verdict", "pass", "--anchor", "commit:abc", "--evidence", "independent-test", "--actor", "qa")
+        self.run_cli("work", "deliver", "W-1", "--anchor", self.anchor, "--evidence", self.execution_evidence, "--actor", "dev")
+        self.run_cli("work", "quality", "W-1", "--verdict", "pass", "--anchor", self.anchor, "--evidence", self.quality_evidence, "--actor", "qa")
         self.run_cli("work", "accept", "W-1", "--actor", "gov")
         self.run_cli("work", "close", "W-1", "--actor", "gov")
         recovered = self.run_cli("recover")
@@ -69,9 +72,9 @@ class VoyageCliTests(unittest.TestCase):
         self.run_cli("work", "create", "W-1", "--title", "CLI flow", "--scope", "temporary test project", "--acceptance", "works", "--actor", "gov")
         self.run_cli("work", "authorize", "W-1", "--actor", "gov")
         self.run_cli("work", "start", "W-1", "--actor", "dev")
-        self.run_cli("work", "deliver", "W-1", "--anchor", "commit:abc", "--evidence", "self-test", "--actor", "dev")
+        self.run_cli("work", "deliver", "W-1", "--anchor", self.anchor, "--evidence", self.execution_evidence, "--actor", "dev")
         result = subprocess.run(
-            [sys.executable, "-B", str(SCRIPT), "--root", str(self.root), "work", "quality", "W-1", "--verdict", "pass", "--anchor", "commit:abc", "--evidence", "self-review", "--actor", "dev"],
+            [sys.executable, "-B", str(SCRIPT), "--root", str(self.root), "work", "quality", "W-1", "--verdict", "pass", "--anchor", self.anchor, "--evidence", self.execution_evidence, "--actor", "dev"],
             check=False,
             text=True,
             capture_output=True,

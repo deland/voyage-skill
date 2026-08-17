@@ -61,6 +61,37 @@ Migration appends confirmation evidence and adds the operational stage; it does
 not rewrite earlier ledger events. Do not use migration to bypass a new
 bootstrap project's per-source activation.
 
+## Typed evidence protocol
+
+Prepare a version-1 JSON evidence document, then store and verify it:
+
+```bash
+voyage --root <project> evidence record --file <evidence.json> --actor <principal>
+voyage --root <project> evidence show sha256:<digest>
+voyage --root <project> evidence verify sha256:<digest> --actor <principal>
+```
+
+The body is stored at `.voyage/evidence/sha256/<digest>.json`; the ledger stores
+the stable `sha256:<digest>` ID and an append-only `evidence.verified` result.
+Every document has `kind`, `version`, `claim`, `locator`, `observed_at`, and
+`producer`. Supported kinds are `git-commit`, `artifact-digest`,
+`command-result`, `runtime-readback`, and `user-decision`.
+
+Git commits must use a full readable commit SHA. Artifact and raw command-output
+digests are recomputed from project-contained files. Command results include
+argv, cwd, exit code, complete pass/fail/skip/unknown counts, and unfiltered
+stdout/stderr artifacts. A `runtime-readback` is valid only inside its declared
+freshness interval; expiry produces `unknown`, never pass. User decisions are
+rechecked against the current User-loop event, exact action/project/source
+scope, and revocation state.
+
+Delivery, independent quality, and gate events consume typed IDs and revalidate
+the underlying fact at use time. Existing free-form ledger references remain
+readable as `legacy-unverified`, but cannot satisfy a newly appended delivery,
+quality, or gate transition. Record or re-verify typed evidence explicitly;
+never rename a legacy string to a `sha256:` ID or infer trust from old session
+memory.
+
 ## Work protocol
 
 1. Create work with scope, acceptance, non-goals, risk, dependencies, and resources.

@@ -14,6 +14,7 @@ from .core import (
     append_event,
     current_state,
     initialize_project,
+    load_evidence,
     load_json,
     migrate_legacy_project,
     new_lease_expiry,
@@ -21,6 +22,8 @@ from .core import (
     project_paths,
     register_resource,
     recovery_snapshot,
+    record_evidence,
+    record_evidence_verification,
     truth_status,
     validate_project,
 )
@@ -54,6 +57,17 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="Show the derived project state")
     status.add_argument("--full", action="store_true", help="Include complete derived state")
     sub.add_parser("recover", help="Show a cold-start recovery snapshot")
+
+    evidence = sub.add_parser("evidence", help="Record and revalidate typed evidence")
+    evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_record = evidence_sub.add_parser("record", help="Store a versioned evidence JSON document and append verification")
+    evidence_record.add_argument("--file", required=True, help="JSON evidence document")
+    common_actor(evidence_record, loop="system")
+    evidence_show = evidence_sub.add_parser("show", help="Read one content-addressed evidence document")
+    evidence_show.add_argument("evidence_id")
+    evidence_verify = evidence_sub.add_parser("verify", help="Re-read real state and append a fresh verification result")
+    evidence_verify.add_argument("evidence_id")
+    common_actor(evidence_verify, loop="system")
 
     truth = sub.add_parser("truth", help="Inspect and activate registered sources of truth")
     truth_sub = truth.add_subparsers(dest="truth_command", required=True)
@@ -227,6 +241,16 @@ def build_parser() -> argparse.ArgumentParser:
     common_actor(record)
 
     return parser
+
+
+def handle_evidence(paths, args) -> None:
+    if args.evidence_command == "record":
+        document = load_json(Path(args.file).expanduser().resolve())
+        emit(record_evidence(paths, document, actor=args.actor))
+    elif args.evidence_command == "show":
+        emit({"evidence_id": args.evidence_id, "document": load_evidence(paths, args.evidence_id)})
+    elif args.evidence_command == "verify":
+        emit(record_evidence_verification(paths, args.evidence_id, actor=args.actor))
 
 
 def append_from_args(paths, args, *, event_type: str, subject: str, risk: str = "standard", payload=None, anchor=None, authorization=None):
@@ -433,7 +457,9 @@ def run(args: argparse.Namespace) -> int:
             raise VoyageError("cannot recover invalid project: " + "; ".join(errors))
         emit(recovery_snapshot(paths))
         return 0
-    if args.command == "work":
+    if args.command == "evidence":
+        handle_evidence(paths, args)
+    elif args.command == "work":
         handle_work(paths, args)
     elif args.command == "truth":
         handle_truth(paths, args)

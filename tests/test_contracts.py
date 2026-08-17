@@ -114,6 +114,14 @@ class DogfoodContractTests(unittest.TestCase):
     def test_schema_files_are_exercised_by_tests(self) -> None:
         paths = project_paths(REPOSITORY)
         valid_instances = {
+            "evidence": {
+                "kind": "runtime-readback",
+                "version": 1,
+                "claim": "schema-fixture",
+                "locator": {"environment_id": "fixture", "target_version": "v1", "fields": {"healthy": True}, "max_age_seconds": 60},
+                "observed_at": "2026-08-17T00:00:00Z",
+                "producer": "schema-test",
+            },
             "manifest": load_json(paths.manifest),
             "graph": load_json(paths.graph),
             "resources": load_json(paths.resources),

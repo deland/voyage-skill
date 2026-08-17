@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voyage-skill.local/schemas/evidence.schema.json",
+  "title": "VoyageSkill typed evidence document",
+  "type": "object",
+  "required": ["kind", "version", "claim", "locator", "observed_at", "producer"],
+  "properties": {
+    "kind": {"enum": ["git-commit", "artifact-digest", "command-result", "runtime-readback", "user-decision"]},
+    "version": {"const": 1},
+    "claim": {"type": "string", "minLength": 1},
+    "locator": {"type": "object"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "producer": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

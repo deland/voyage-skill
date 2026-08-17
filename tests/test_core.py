@@ -16,7 +16,7 @@ from voyage_skill.core import (
     register_resource,
     validate_project,
 )
-from tests.support import operational_project
+from tests.support import operational_project, typed_artifact_anchor, typed_command_evidence
 
 
 class VoyageCoreTests(unittest.TestCase):
@@ -24,6 +24,9 @@ class VoyageCoreTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.paths = operational_project(self.root, "example")
+        self.anchor = typed_artifact_anchor(self.paths, name="default-delivery")
+        self.execution_evidence = typed_command_evidence(self.paths, name="execution", producer="dev")
+        self.quality_evidence = typed_command_evidence(self.paths, name="quality", producer="qa")
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -52,18 +55,18 @@ class VoyageCoreTests(unittest.TestCase):
             payload={"title": "Example", "scope": "temporary test project", "acceptance": ["verified"], "dependencies": [], "required_resources": resources or []},
         )
 
-    def deliver(self, work_id: str = "W-1", *, anchor: str = "commit:abc") -> None:
+    def deliver(self, work_id: str = "W-1", *, anchor: str | None = None) -> None:
         self.event("work.started", work_id, actor="dev", loop="execution")
-        self.event("work.delivered", work_id, actor="dev", loop="execution", anchor=anchor, evidence=["test:self"])
+        self.event("work.delivered", work_id, actor="dev", loop="execution", anchor=anchor or self.anchor, evidence=[self.execution_evidence])
 
-    def quality_pass(self, work_id: str = "W-1", *, anchor: str = "commit:abc") -> None:
+    def quality_pass(self, work_id: str = "W-1", *, anchor: str | None = None) -> None:
         self.event(
             "quality.passed",
             work_id,
             actor="qa",
             loop="quality",
-            anchor=anchor,
-            evidence=["test:independent"],
+            anchor=anchor or self.anchor,
+            evidence=[self.quality_evidence],
             payload={"counts": {"total": 1, "passed": 1, "failed": 0, "skipped": 0, "unknown": 0}},
         )
 
@@ -130,16 +133,18 @@ class VoyageCoreTests(unittest.TestCase):
                 "W-1",
                 actor="dev",
                 loop="quality",
-                anchor="commit:abc",
-                evidence=["self-review"],
+                anchor=self.anchor,
+                evidence=[self.execution_evidence],
             )
 
     def test_quality_must_target_current_anchor(self) -> None:
         self.create_work()
         self.event("work.authorized", "W-1", actor="gov", loop="governance")
-        self.deliver(anchor="commit:new")
+        current_anchor = typed_artifact_anchor(self.paths, name="current")
+        stale_anchor = typed_artifact_anchor(self.paths, name="stale")
+        self.deliver(anchor=current_anchor)
         with self.assertRaisesRegex(VoyageError, "quality anchor does not match"):
-            self.event("quality.passed", "W-1", actor="qa", loop="quality", anchor="commit:old", evidence=["review"])
+            self.event("quality.passed", "W-1", actor="qa", loop="quality", anchor=stale_anchor, evidence=[self.quality_evidence])
 
     def test_strict_work_requires_user_authorization(self) -> None:
         self.create_work(risk="strict")
@@ -283,8 +288,8 @@ class VoyageCoreTests(unittest.TestCase):
             "W-1",
             actor="qa",
             loop="quality",
-            anchor="commit:abc",
-            evidence=["e2e:report"],
+            anchor=self.anchor,
+            evidence=[self.quality_evidence],
             payload={"gate_id": "e2e", "counts": {"total": 1, "passed": 0, "failed": 0, "skipped": 1, "unknown": 0}},
         )
         self.quality_pass()

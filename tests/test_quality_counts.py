@@ -5,11 +5,14 @@ import unittest
 from pathlib import Path
 
 from voyage_skill.core import VoyageError, append_event, current_state, initialize_project, load_events
-from tests.support import operational_project
+from tests.support import find_typed_evidence, operational_project, typed_artifact_anchor, typed_command_evidence
 
 
 def delivered_project(root: Path):
     paths = operational_project(root, "quality-counts")
+    anchor = typed_artifact_anchor(paths, name="counts-delivery")
+    execution_evidence = typed_command_evidence(paths, name="counts-execution", producer="dev")
+    typed_command_evidence(paths, name="counts-quality", producer="qa")
     append_event(
         paths,
         actor="gov",
@@ -28,13 +31,15 @@ def delivered_project(root: Path):
         event_type="work.delivered",
         subject="W-1",
         risk="standard",
-        anchor="commit:counts",
-        evidence=["test:self"],
+        anchor=anchor,
+        evidence=[execution_evidence],
     )
     return paths
 
 
 def quality(paths, event_type: str, counts: object):
+    anchor = current_state(paths)["works"]["W-1"]["delivery"]["anchor"]
+    quality_evidence = find_typed_evidence(paths, kind="command-result", producer="qa")
     return append_event(
         paths,
         actor="qa",
@@ -43,8 +48,8 @@ def quality(paths, event_type: str, counts: object):
         subject="W-1",
         risk="standard",
         payload={"counts": counts},
-        anchor="commit:counts",
-        evidence=["test:independent"],
+        anchor=anchor,
+        evidence=[quality_evidence],
     )
 
 

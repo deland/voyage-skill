@@ -23,6 +23,7 @@ Run these commands before resuming an existing project:
 ```bash
 python3 <voyage-skill>/scripts/voyage.py --root <project> validate
 python3 <voyage-skill>/scripts/voyage.py --root <project> truth status
+python3 <voyage-skill>/scripts/voyage.py --root <project> evidence verify <evidence-id> --actor <principal>
 python3 <voyage-skill>/scripts/voyage.py --root <project> recover
 ```
 
@@ -36,6 +37,7 @@ the registered runbook for bootstrap activation or legacy migration.
 - Create work with scope, non-goals, risk, acceptance criteria, and required resources.
 - Bind permissions by work scope; do not invent fixed permanent roles.
 - Require a new immutable anchor for every delivery attempt.
+- Record typed evidence before delivery and run `voyage evidence verify` before consuming volatile evidence.
 - Keep execution and final quality signatures on the same delivery independent.
 - Reference the same anchor from asynchronous review, test, merge, and deployment actions.
 - Record complete gate counts, including failures, skips, and unknown results.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import voyage_skill.core as core
@@ -160,3 +161,74 @@ def legacy_project(root: Path, project_id: str = "legacy") -> core.ProjectPaths:
         previous = event["hash"]
     paths.ledger.write_text("".join(core.canonical_json(event) + "\n" for event in events), encoding="utf-8")
     return paths
+
+
+def typed_artifact_anchor(
+    paths: core.ProjectPaths,
+    *,
+    name: str = "delivery",
+    content: bytes | None = None,
+    producer: str = "dev",
+) -> str:
+    body = content if content is not None else f"artifact:{name}\n".encode("utf-8")
+    relative = f".voyage/test-artifacts/{name}.bin"
+    target = paths.root / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(body)
+    result = core.record_evidence(
+        paths,
+        {
+            "kind": "artifact-digest",
+            "version": 1,
+            "claim": "delivery-artifact",
+            "locator": {"path": relative, "algorithm": "sha256", "digest": hashlib.sha256(body).hexdigest()},
+            "observed_at": core.utc_now(),
+            "producer": producer,
+        },
+        actor=producer,
+    )
+    return result["evidence_id"]
+
+
+def typed_command_evidence(
+    paths: core.ProjectPaths,
+    *,
+    name: str = "command",
+    producer: str = "tester",
+) -> str:
+    stdout_body = f"{name}: 1 passed\n".encode("utf-8")
+    stderr_body = b""
+    base = f".voyage/test-artifacts/{name}"
+    stdout_path = paths.root / f"{base}.stdout"
+    stderr_path = paths.root / f"{base}.stderr"
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_bytes(stdout_body)
+    stderr_path.write_bytes(stderr_body)
+    result = core.record_evidence(
+        paths,
+        {
+            "kind": "command-result",
+            "version": 1,
+            "claim": "command-passed",
+            "locator": {
+                "argv": ["fixture", name],
+                "cwd": ".",
+                "exit_code": 0,
+                "stdout": {"path": f"{base}.stdout", "bytes": len(stdout_body), "sha256": hashlib.sha256(stdout_body).hexdigest()},
+                "stderr": {"path": f"{base}.stderr", "bytes": 0, "sha256": hashlib.sha256(stderr_body).hexdigest()},
+                "counts": {"total": 1, "passed": 1, "failed": 0, "skipped": 0, "unknown": 0},
+            },
+            "observed_at": core.utc_now(),
+            "producer": producer,
+        },
+        actor=producer,
+    )
+    return result["evidence_id"]
+
+
+def find_typed_evidence(paths: core.ProjectPaths, *, kind: str, producer: str) -> str:
+    for path in sorted((paths.evidence / "sha256").glob("*.json")):
+        document = core.load_json(path)
+        if document.get("kind") == kind and document.get("producer") == producer:
+            return f"sha256:{path.stem}"
+    raise AssertionError(f"fixture evidence not found: kind={kind} producer={producer}")

@@ -4,7 +4,9 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import socket
+import subprocess
 import tempfile
 import uuid
 from contextlib import contextmanager
@@ -22,6 +24,9 @@ STATEFUL_RESOURCE_TYPES = {"account", "environment", "session", "window", "quota
 ALLOWED_RESOURCE_TYPES = {"file", "account", "port", "environment", "session", "window", "quota"}
 ALLOWED_RESOURCE_MODES = {"exclusive", "shared-read", "serialized", "rebuildable"}
 REQUIRED_TRUTH_DOMAINS = ("product", "governance", "system", "operations")
+EVIDENCE_KINDS = {"git-commit", "artifact-digest", "command-result", "runtime-readback", "user-decision"}
+EVIDENCE_ID_PATTERN = re.compile(r"^sha256:([a-f0-9]{64})$")
+EVIDENCE_VALIDATOR_VERSION = 1
 REQUIRED_CONTRACT_SECTIONS = {
     "product": ("Goals", "Non-goals", "Acceptance boundary"),
     "governance": ("User authority", "Loop authority", "Risk boundary"),
@@ -66,6 +71,319 @@ def canonical_json(value: Any) -> str:
 
 def content_hash(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def _inside_project(root: Path, value: Any, *, label: str) -> Path:
+    if not isinstance(value, str) or not value:
+        raise VoyageError(f"{label} must be a non-empty project-relative path")
+    target = (root / value).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise VoyageError(f"{label} escapes project root: {value}") from exc
+    return target
+
+
+def _evidence_common_errors(document: Any) -> list[str]:
+    if not isinstance(document, dict):
+        return ["evidence document must be an object"]
+    errors: list[str] = []
+    required_types = {
+        "kind": str,
+        "version": int,
+        "claim": str,
+        "locator": dict,
+        "observed_at": str,
+        "producer": str,
+    }
+    for field, expected in required_types.items():
+        value = document.get(field)
+        if field not in document:
+            errors.append(f"evidence {field} is required")
+        elif not isinstance(value, expected) or isinstance(value, bool):
+            errors.append(f"evidence {field} has invalid type")
+        elif expected is str and not value:
+            errors.append(f"evidence {field} must be non-empty")
+    if isinstance(document.get("version"), int) and document.get("version") != 1:
+        errors.append("evidence version must be 1")
+    if isinstance(document.get("kind"), str) and document.get("kind") not in EVIDENCE_KINDS:
+        errors.append(f"unsupported evidence kind: {document.get('kind')}")
+    if isinstance(document.get("observed_at"), str):
+        try:
+            parse_time(document["observed_at"])
+        except (TypeError, ValueError):
+            errors.append("evidence observed_at must be an RFC3339 timestamp")
+    return errors
+
+
+def _descriptor_errors(paths: ProjectPaths, descriptor: Any, *, label: str) -> list[str]:
+    if not isinstance(descriptor, dict):
+        return [f"{label} must describe a raw output artifact"]
+    errors: list[str] = []
+    path_value = descriptor.get("path")
+    try:
+        target = _inside_project(paths.root, path_value, label=f"{label} path")
+    except VoyageError as exc:
+        return [str(exc)]
+    if not target.is_file():
+        errors.append(f"{label} artifact is not a file: {path_value}")
+        return errors
+    content = target.read_bytes()
+    byte_count = descriptor.get("bytes")
+    digest = descriptor.get("sha256")
+    if not isinstance(byte_count, int) or isinstance(byte_count, bool) or byte_count < 0:
+        errors.append(f"{label} bytes must be a non-negative integer")
+    elif byte_count != len(content):
+        errors.append(f"{label} byte count does not match raw artifact")
+    if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+        errors.append(f"{label} sha256 must be a full digest")
+    elif digest != hashlib.sha256(content).hexdigest():
+        errors.append(f"{label} sha256 does not match raw artifact")
+    return errors
+
+
+def _verify_git_commit(paths: ProjectPaths, document: dict[str, Any]) -> tuple[str, list[str]]:
+    locator = document["locator"]
+    repository = locator.get("repository")
+    revision = locator.get("revision")
+    try:
+        target = _inside_project(paths.root, repository, label="git repository")
+    except VoyageError as exc:
+        return "invalid", [str(exc)]
+    if not target.is_dir():
+        return "invalid", [f"git repository is not a directory: {repository}"]
+    if not isinstance(revision, str) or not re.fullmatch(r"(?:[a-f0-9]{40}|[a-f0-9]{64})", revision):
+        return "invalid", ["git revision must be a full hexadecimal commit SHA"]
+    try:
+        inside = subprocess.run(
+            ["git", "-C", str(target), "rev-parse", "--show-toplevel"],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        if inside.returncode != 0:
+            return "invalid", [f"not a readable Git repository: {repository}"]
+        if Path(inside.stdout.strip()).resolve() != target:
+            return "invalid", [f"declared Git repository is not its exact worktree root: {repository}"]
+        resolved = subprocess.run(
+            ["git", "-C", str(target), "rev-parse", "--verify", f"{revision}^{{commit}}"],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return "invalid", [f"Git commit readback failed: {exc}"]
+    if resolved.returncode != 0:
+        return "invalid", ["Git commit does not exist or is not readable"]
+    if resolved.stdout.strip().lower() != revision.lower():
+        return "invalid", ["Git commit readback did not resolve to the exact full SHA"]
+    return "valid", []
+
+
+def _verify_artifact_digest(paths: ProjectPaths, document: dict[str, Any]) -> tuple[str, list[str]]:
+    locator = document["locator"]
+    if locator.get("algorithm") != "sha256":
+        return "invalid", ["artifact algorithm must be sha256"]
+    digest = locator.get("digest")
+    if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+        return "invalid", ["artifact digest must be a full sha256"]
+    try:
+        target = _inside_project(paths.root, locator.get("path"), label="artifact path")
+    except VoyageError as exc:
+        return "invalid", [str(exc)]
+    if not target.is_file():
+        return "invalid", [f"artifact is not a file: {locator.get('path')}"]
+    if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+        return "invalid", ["artifact sha256 does not match current file"]
+    return "valid", []
+
+
+def _counts_errors(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return ["command counts must be an object"]
+    keys = ("total", "passed", "failed", "skipped", "unknown")
+    errors: list[str] = []
+    for key in keys:
+        count = value.get(key)
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            errors.append(f"command counts {key} must be a non-negative integer")
+    if not errors and sum(value[key] for key in keys[1:]) != value["total"]:
+        errors.append("command counts do not add up")
+    return errors
+
+
+def _verify_command_result(paths: ProjectPaths, document: dict[str, Any]) -> tuple[str, list[str]]:
+    locator = document["locator"]
+    errors: list[str] = []
+    argv = locator.get("argv")
+    if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item for item in argv):
+        errors.append("command argv must be a non-empty string array")
+    try:
+        cwd = _inside_project(paths.root, locator.get("cwd"), label="command cwd")
+        if not cwd.is_dir():
+            errors.append("command cwd is not a directory")
+    except VoyageError as exc:
+        errors.append(str(exc))
+    exit_code = locator.get("exit_code")
+    if not isinstance(exit_code, int) or isinstance(exit_code, bool):
+        errors.append("command exit_code must be an integer")
+    errors.extend(_counts_errors(locator.get("counts")))
+    errors.extend(_descriptor_errors(paths, locator.get("stdout"), label="stdout"))
+    errors.extend(_descriptor_errors(paths, locator.get("stderr"), label="stderr"))
+    counts = locator.get("counts")
+    if not errors and document.get("claim") == "command-passed":
+        if exit_code != 0 or any(counts[key] for key in ("failed", "skipped", "unknown")):
+            errors.append("command-passed claim contradicts exit code or complete counts")
+    return ("invalid", errors) if errors else ("valid", [])
+
+
+def _verify_runtime_readback(document: dict[str, Any], now: datetime) -> tuple[str, list[str]]:
+    locator = document["locator"]
+    errors: list[str] = []
+    for field in ("environment_id", "target_version"):
+        if not isinstance(locator.get(field), str) or not locator.get(field):
+            errors.append(f"runtime {field} must be non-empty")
+    if not isinstance(locator.get("fields"), dict) or not locator.get("fields"):
+        errors.append("runtime fields must be a non-empty object")
+    max_age = locator.get("max_age_seconds")
+    if not isinstance(max_age, int) or isinstance(max_age, bool) or max_age <= 0:
+        errors.append("runtime max_age_seconds must be a positive integer")
+    try:
+        observed = parse_time(document["observed_at"])
+    except (TypeError, ValueError):
+        return "invalid", ["runtime observed_at is invalid"]
+    if observed > now:
+        errors.append("runtime observed_at is in the future")
+    if errors:
+        return "invalid", errors
+    if (now - observed).total_seconds() > max_age:
+        return "unknown", ["runtime readback has expired"]
+    return "valid", []
+
+
+def _verify_user_decision(state: dict[str, Any], document: dict[str, Any]) -> tuple[str, list[str]]:
+    locator = document["locator"]
+    required = ("decision_id", "action", "project_id")
+    if any(not isinstance(locator.get(field), str) or not locator.get(field) for field in required):
+        return "invalid", ["user decision locator requires decision_id, action, and project_id"]
+    decision = state.get("decisions", {}).get(locator["decision_id"])
+    if decision is None or decision.get("loop") != "user":
+        return "invalid", ["referenced User decision does not exist"]
+    if decision.get("revoked"):
+        return "invalid", ["referenced User decision is revoked"]
+    scope = decision.get("payload", {}).get("scope")
+    if not isinstance(scope, dict):
+        return "invalid", ["referenced User decision has no object scope"]
+    actions = scope.get("actions")
+    if not isinstance(actions, list) or locator["action"] not in actions and "*" not in actions:
+        return "invalid", ["User decision does not cover requested action"]
+    if scope.get("project_id") not in {locator["project_id"], "*"}:
+        return "invalid", ["User decision does not cover requested project"]
+    source_id = locator.get("source_id")
+    if source_id is not None:
+        sources = scope.get("truth_sources")
+        if not isinstance(source_id, str) or not source_id or not isinstance(sources, list) or source_id not in sources and "*" not in sources:
+            return "invalid", ["User decision does not cover requested source"]
+    return "valid", []
+
+
+def load_evidence(paths: ProjectPaths, evidence_id: str) -> dict[str, Any]:
+    match = EVIDENCE_ID_PATTERN.fullmatch(evidence_id) if isinstance(evidence_id, str) else None
+    if match is None:
+        raise VoyageError("reference is not a typed evidence ID")
+    digest = match.group(1)
+    document = load_json(paths.evidence / "sha256" / f"{digest}.json")
+    actual = content_hash(document)
+    if actual != digest:
+        raise VoyageError(f"evidence digest mismatch for {evidence_id}")
+    return document
+
+
+def verify_evidence(
+    paths: ProjectPaths,
+    evidence_id: str,
+    *,
+    now: datetime | None = None,
+    state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    checked_at = now or datetime.now(timezone.utc)
+    if checked_at.tzinfo is None:
+        raise VoyageError("evidence verification time must include timezone")
+    reasons: list[str] = []
+    kind: str | None = None
+    try:
+        document = load_evidence(paths, evidence_id)
+    except VoyageError as exc:
+        return {
+            "evidence_id": evidence_id,
+            "kind": None,
+            "status": "invalid",
+            "reasons": [str(exc)],
+            "validator_version": EVIDENCE_VALIDATOR_VERSION,
+            "verified_at": checked_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        }
+    common_errors = _evidence_common_errors(document)
+    kind = document.get("kind") if isinstance(document.get("kind"), str) else None
+    if common_errors:
+        status, reasons = "invalid", common_errors
+    elif kind == "git-commit":
+        status, reasons = _verify_git_commit(paths, document)
+    elif kind == "artifact-digest":
+        status, reasons = _verify_artifact_digest(paths, document)
+    elif kind == "command-result":
+        status, reasons = _verify_command_result(paths, document)
+    elif kind == "runtime-readback":
+        status, reasons = _verify_runtime_readback(document, checked_at)
+    elif kind == "user-decision":
+        status, reasons = _verify_user_decision(state or current_state(paths), document)
+    else:
+        status, reasons = "invalid", [f"unsupported evidence kind: {kind}"]
+    return {
+        "evidence_id": evidence_id,
+        "kind": kind,
+        "status": status,
+        "reasons": reasons,
+        "validator_version": EVIDENCE_VALIDATOR_VERSION,
+        "verified_at": checked_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
+    }
+
+
+def record_evidence(paths: ProjectPaths, document: dict[str, Any], *, actor: str) -> dict[str, Any]:
+    common_errors = _evidence_common_errors(document)
+    if common_errors:
+        raise VoyageError("; ".join(common_errors))
+    digest = content_hash(document)
+    evidence_id = f"sha256:{digest}"
+    target = paths.evidence / "sha256" / f"{digest}.json"
+    if target.exists():
+        existing = load_json(target)
+        if canonical_json(existing) != canonical_json(document):
+            raise VoyageError(f"content-addressed evidence collision: {evidence_id}")
+    else:
+        atomic_write_json(target, document)
+    return record_evidence_verification(paths, evidence_id, actor=actor)
+
+
+def record_evidence_verification(paths: ProjectPaths, evidence_id: str, *, actor: str) -> dict[str, Any]:
+    result = verify_evidence(paths, evidence_id)
+    append_event(
+        paths,
+        actor=actor,
+        loop="system",
+        event_type="evidence.verified",
+        subject=evidence_id,
+        risk="standard",
+        payload={
+            "validator_version": result["validator_version"],
+            "verified_at": result["verified_at"],
+            "status": result["status"],
+            "reasons": result["reasons"],
+            "kind": result["kind"],
+        },
+    )
+    return result
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -508,6 +826,7 @@ def _require_decision_scope(
 ) -> dict[str, Any]:
     decision = state["decisions"].get(decision_id)
     _require(decision is not None and decision.get("loop") == "user", "operation must reference a recorded User decision")
+    _require(not decision.get("revoked"), "referenced User decision is revoked")
     scope = decision.get("payload", {}).get("scope")
     _require(isinstance(scope, dict), "User decision requires an object scope")
     actions = scope.get("actions")
@@ -633,6 +952,28 @@ def replay_events(
                 }
             state["project_stage"] = "operational"
 
+        elif event_type == "evidence.verified":
+            _require(loop == "system", "evidence verification requires system loop")
+            _require(EVIDENCE_ID_PATTERN.fullmatch(subject) is not None, "evidence verification requires typed evidence ID")
+            _require(payload.get("validator_version") == EVIDENCE_VALIDATOR_VERSION, "unsupported evidence validator version")
+            _require(payload.get("status") in {"valid", "invalid", "unknown"}, "invalid evidence verification status")
+            _require(isinstance(payload.get("reasons"), list), "evidence verification reasons must be an array")
+            _require(isinstance(payload.get("verified_at"), str), "evidence verification requires verified_at")
+            try:
+                parse_time(payload["verified_at"])
+            except (TypeError, ValueError) as exc:
+                raise VoyageError("evidence verification verified_at is invalid") from exc
+            state["observations"].append(event)
+
+        elif event_type == "decision.revoked":
+            _require(loop == "user", "decision revocation requires User loop")
+            decision = state["decisions"].get(subject)
+            _require(decision is not None, f"decision does not exist: {subject}")
+            _require(not decision.get("revoked"), f"decision already revoked: {subject}")
+            _require(payload.get("reason"), "decision revocation requires reason")
+            decision["revoked"] = True
+            decision["revoked_event"] = event["event_id"]
+
         elif event_type == "work.created":
             _require(loop == "governance", "work creation requires governance loop")
             _require(subject not in state["works"], f"work already exists: {subject}")
@@ -667,7 +1008,9 @@ def replay_events(
             _require(work["status"] == "draft", f"work {subject} is not draft")
             if work["risk"] == "strict":
                 _require(bool(event.get("authorization")), "strict work requires User authorization")
-                _require(event["authorization"] in state["decisions"], "strict work authorization must reference a recorded User decision")
+                decision = state["decisions"].get(event["authorization"])
+                _require(decision is not None, "strict work authorization must reference a recorded User decision")
+                _require(not decision.get("revoked"), "strict work authorization references a revoked User decision")
             work["authorization"] = event.get("authorization")
             work["status"] = "authorized"
 
@@ -699,7 +1042,7 @@ def replay_events(
             _require(bool(anchor), "delivery requires immutable anchor")
             _require(bool(evidence), "delivery requires evidence")
             attempt = 1 + (work["delivery"]["attempt"] if work["delivery"] else 0)
-            work["delivery"] = {"anchor": anchor, "actor": actor, "attempt": attempt, "event_id": event["event_id"]}
+            work["delivery"] = {"anchor": anchor, "evidence": list(evidence), "actor": actor, "attempt": attempt, "event_id": event["event_id"]}
             work["quality_actor"] = None
             work["status"] = "delivered"
             state["gates"].setdefault(subject, {}).pop("independent-quality", None)
@@ -728,6 +1071,7 @@ def replay_events(
             state["gates"].setdefault(subject, {})["independent-quality"] = {
                 "verdict": verdict,
                 "anchor": anchor,
+                "evidence": list(evidence),
                 "actor": actor,
                 "counts": counts,
             }
@@ -744,7 +1088,7 @@ def replay_events(
             _require(loop == required_loop, f"gate {gate_id} requires {required_loop} loop")
             counts = _validated_counts(payload.get("counts"), context="gate")
             verdict = "pass" if counts["failed"] == 0 and counts["unknown"] == 0 and (gate_defs[gate_id].get("allow_skips", False) or counts["skipped"] == 0) else "fail"
-            state["gates"].setdefault(subject, {})[gate_id] = {"verdict": verdict, "anchor": anchor, "actor": actor, "counts": counts}
+            state["gates"].setdefault(subject, {})[gate_id] = {"verdict": verdict, "anchor": anchor, "evidence": list(evidence), "actor": actor, "counts": counts}
 
         elif event_type == "work.accepted":
             _require(loop == "governance", "work acceptance requires governance loop")
@@ -813,7 +1157,9 @@ def replay_events(
             work = _work(state, subject)
             _require(work["status"] == "awaiting-user", f"work {subject} is not awaiting User")
             decision = event.get("authorization")
-            _require(decision in state["decisions"], "work resume must reference a recorded User decision")
+            recorded_decision = state["decisions"].get(decision)
+            _require(recorded_decision is not None, "work resume must reference a recorded User decision")
+            _require(not recorded_decision.get("revoked"), "work resume references a revoked User decision")
             work["authorization"] = decision
             work["status"] = work.get("previous_status") or "authorized"
             work["previous_status"] = None
@@ -828,7 +1174,9 @@ def replay_events(
             work = _work(state, payload["work_id"])
             definition = resource_defs[resource_id]
             if definition.get("risk") == "strict" or work["risk"] == "strict":
-                _require(work.get("authorization") in state["decisions"], f"strict resource {resource_id} requires recorded User authorization")
+                decision = state["decisions"].get(work.get("authorization"))
+                _require(decision is not None, f"strict resource {resource_id} requires recorded User authorization")
+                _require(not decision.get("revoked"), f"strict resource {resource_id} authorization is revoked")
             conflicts = definition.get("conflict_key", resource_id)
             if definition.get("mode") in {"exclusive", "serialized"}:
                 for lease in state["leases"].values():
@@ -930,6 +1278,58 @@ def replay_events(
     return state
 
 
+def _enforce_typed_transition_evidence(
+    paths: ProjectPaths,
+    state: dict[str, Any],
+    *,
+    event_type: str,
+    subject: str,
+    anchor: str | None,
+    evidence: list[str] | None,
+) -> None:
+    typed_events = {"work.delivered", "quality.passed", "quality.rejected", "gate.recorded"}
+    if event_type in {"work.accepted", "work.closed"}:
+        work = state.get("works", {}).get(subject)
+        if not isinstance(work, dict) or not isinstance(work.get("delivery"), dict):
+            return
+        delivery = work["delivery"]
+        delivery_anchor = verify_evidence(paths, delivery.get("anchor", ""), state=state)
+        if delivery_anchor["status"] != "valid":
+            raise VoyageError(f"current delivery anchor is {delivery_anchor['status']}: {'; '.join(delivery_anchor['reasons'])}")
+        for evidence_id in delivery.get("evidence", []):
+            result = verify_evidence(paths, evidence_id, state=state)
+            if result["status"] != "valid":
+                raise VoyageError(f"current delivery evidence {evidence_id} is {result['status']}: {'; '.join(result['reasons'])}")
+        gate_definitions = load_json(paths.gates).get("gates", [])
+        mandatory = {
+            item.get("id") for item in gate_definitions
+            if isinstance(item, dict) and item.get("mandatory") is True
+        }
+        for gate_id, result_data in state.get("gates", {}).get(subject, {}).items():
+            if gate_id not in mandatory:
+                continue
+            for evidence_id in result_data.get("evidence", []):
+                result = verify_evidence(paths, evidence_id, state=state)
+                if result["status"] != "valid":
+                    raise VoyageError(f"current gate evidence {evidence_id} is {result['status']}: {'; '.join(result['reasons'])}")
+        return
+    if event_type not in typed_events:
+        return
+    anchor_result = verify_evidence(paths, anchor or "", state=state)
+    if anchor_result["status"] != "valid":
+        reason = "; ".join(anchor_result["reasons"])
+        raise VoyageError(f"anchor is {anchor_result['status']}: {reason}")
+    if anchor_result["kind"] not in {"git-commit", "artifact-digest"}:
+        raise VoyageError("anchor must be valid git-commit or artifact-digest evidence")
+    if not evidence:
+        raise VoyageError(f"{event_type} requires typed evidence")
+    for evidence_id in evidence:
+        result = verify_evidence(paths, evidence_id, state=state)
+        if result["status"] != "valid":
+            reason = "; ".join(result["reasons"])
+            raise VoyageError(f"evidence {evidence_id} is {result['status']}: {reason}")
+
+
 def append_event(
     paths: ProjectPaths,
     *,
@@ -954,6 +1354,14 @@ def append_event(
         existing_state = replay_events(events, resources=resources, gates=gates)
         if existing_state["project_stage"] == "legacy-bootstrap" and event_type not in {"project.initialized", "decision.recorded", "project.migrated"}:
             raise VoyageError("legacy project requires migration confirmation before the first write operation")
+        _enforce_typed_transition_evidence(
+            paths,
+            existing_state,
+            event_type=event_type,
+            subject=subject,
+            anchor=anchor,
+            evidence=evidence,
+        )
         previous_hash = events[-1]["hash"] if events else None
         event = make_event(
             previous_hash,
@@ -1036,6 +1444,42 @@ def register_resource(
         raise
 
 
+def _typed_evidence_validation_errors(
+    paths: ProjectPaths,
+    events: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    checked_documents: set[str] = set()
+    for event in events:
+        if event.get("type") == "evidence.verified":
+            evidence_id = event.get("subject")
+            if not isinstance(evidence_id, str) or evidence_id in checked_documents:
+                continue
+            checked_documents.add(evidence_id)
+            try:
+                document = load_evidence(paths, evidence_id)
+            except VoyageError as exc:
+                errors.append(str(exc))
+                continue
+            errors.extend(f"evidence {evidence_id}: {error}" for error in _evidence_common_errors(document))
+
+        if event.get("type") not in {"work.delivered", "quality.passed", "quality.rejected", "gate.recorded"}:
+            continue
+        anchor = event.get("anchor")
+        if isinstance(anchor, str) and EVIDENCE_ID_PATTERN.fullmatch(anchor):
+            result = verify_evidence(paths, anchor, state=state)
+            if result["status"] != "valid":
+                errors.append(f"consumed anchor {anchor} is {result['status']}: {'; '.join(result['reasons'])}")
+        for evidence_id in event.get("evidence", []):
+            if not isinstance(evidence_id, str) or EVIDENCE_ID_PATTERN.fullmatch(evidence_id) is None:
+                continue
+            result = verify_evidence(paths, evidence_id, state=state)
+            if result["status"] != "valid":
+                errors.append(f"consumed evidence {evidence_id} is {result['status']}: {'; '.join(result['reasons'])}")
+    return errors
+
+
 def validate_project(paths: ProjectPaths) -> list[str]:
     errors: list[str] = []
     try:
@@ -1115,6 +1559,7 @@ def validate_project(paths: ProjectPaths) -> list[str]:
         if not errors:
             state = replay_events(events, resources=resources, gates=gates)
             errors.extend(_truth_runtime_errors(paths, state, registry, manifest))
+            errors.extend(_typed_evidence_validation_errors(paths, events, state))
     except VoyageError as exc:
         errors.append(str(exc))
     except (KeyError, TypeError, ValueError) as exc:
