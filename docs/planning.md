@@ -563,3 +563,22 @@ active → retired | superseded
 - Readback: final forward project recovered as `closed` with next action `none`
 - Remaining issues: official `quick_validate.py` is unknown because its environment lacks PyYAML and temporary dependency installation was denied by approval-service 403; equivalent YAML/frontmatter validation passed
 - Next safe action: User creates the implementation commit in the development worktree, then development appends CLOSE against that immutable commit and reruns final gates
+
+---
+
+## 2026-08-17 · DEV-0001 · MK-000 · CLOSE
+
+- Status: complete
+- Baseline: `e971047c99ceeded8d7bfadf47cd1427711bf5e0`
+- Anchor: `3fc28e01c9b257f5f972f06edacaf060b1fe0415`
+- Supersedes: DEV-0001 UPDATE completion blocker
+- Scope: ST-0001 through ST-0005 delivered without expanding into MK-101 or later work
+- Non-goals: bootstrap activation, typed evidence, state-machine convergence, recovery four-way classification, extensions, and graph queries remain deferred to their planned work packages
+- Risk: standard; no production, destructive, paid, credential, or external-write action performed
+- Dependencies: D-0001, D-0002, Python 3.9+, project-local Voyage control files
+- Acceptance gates: all MK-000 implementation gates passed against the immutable anchor
+- Actual result: formal JSON instances are exercised against six Schemas; repository dogfood and metadata drift are guarded; malformed registry, graph, gate, event, lease, and timestamp inputs produce structured errors; quality counts cannot bypass core replay; runtime/Schema authority and actor trust boundaries are recorded
+- Tests: 53 pass, 0 fail, 0 skip; dogfood validate/recover pass; compileall pass; clean-project forward lifecycle pass; invalid quality counts rejected without advancing the ledger
+- Readback: local HEAD resolves to the anchor; recovery reports no blocks or leases; forward project on the same anchor recovered as `closed` with next action `none`
+- Remaining issues: official `quick_validate.py` remains unknown because its external environment lacks PyYAML; equivalent frontmatter rules and repository metadata tests pass. This is a validator-environment issue, not an MK-000 product failure
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch contains the implementation anchor, then begin MK-101 with a new START record and test matrix
