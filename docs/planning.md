@@ -1167,3 +1167,22 @@ active → retired | superseded
 - Readback: work durable/side states and rule durable states exactly match the fixed decisions; rule verification failure and rollback are executable; release/recover resolve the real resource subject; schema event enum equals runtime events; argparse generates the runbook reference; Skill discovery uses manifest and registry domains; all four research inputs retain their original content with only the non-authoritative/non-executable header added
 - Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned equivalent frontmatter, metadata, identity, schema, and invocation tests pass
 - Next safe action: commit the MK-103 implementation, rerun all 169 tests and acceptance gates against the immutable commit, append DEV-0004 CLOSE with its SHA, then commit and push the close record before MK-104
+
+---
+
+## 2026-08-18 · DEV-0004 · MK-103 · CLOSE
+
+- Status: complete
+- Baseline: `bc68706b3167c393588d07f4fc9cdcf0c3449955`
+- Anchor: `bf77f1066b74ae5c86892af34b02927fd528ba6e`
+- Supersedes: none
+- Scope: ST-1032 through ST-1038 delivered; runtime and active truth state contracts converge, rule failure/rollback is executable, CLI reference is argparse-derived, Skill discovery is registry-based, resource event identities are unambiguous, event exchange is schema-constrained, and research inputs are isolated
+- Non-goals: unchanged; MK-104 recovery classification, optional extensions, signatures, remote evidence, and plugin validators remain deferred
+- Risk: standard; accepted only after immutable-anchor readback
+- Dependencies: MK-000 through MK-102 complete; DEV-0004 test-first START, red baseline, and implementation-complete UPDATE satisfied
+- Acceptance gates: full regression, compilation, dogfood validation/truth/recovery, deterministic CLI-reference checker, exact runtime/schema/CLI event coverage, schema and append-only contract tests, research isolation, clean implementation anchor, and exact commit diff hygiene
+- Actual result: PASS; immutable anchor rerun produced 169 passed, 0 failed, 0 skipped; compileall passed; dogfood validate returned no errors; truth status remained operational with six activation-verified active sources; recover reported the same operational stage and ledger head; CLI reference was current; `git diff HEAD^ HEAD --check` passed
+- Tests: all 30 ST-1032 through ST-1038 convergence tests and all 139 prior tests pass against the exact anchor above
+- Readback: anchor contains 15 changed files with 883 insertions and 41 deletions, including the deterministic reference script/module and 388-line convergence suite; the worktree was clean before this CLOSE append
+- Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned equivalent frontmatter, metadata, identity, schema, invocation, and dogfood checks pass
+- Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head, then begin MK-104 with a new test-first START record
