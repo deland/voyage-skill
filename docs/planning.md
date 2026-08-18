@@ -1622,3 +1622,22 @@ active → retired | superseded
 - Fixture migration: existing tests that create version-1 Standard work now provide real typed resource probes, and Strict fixtures provide exact scoped User decisions; recovery fixtures retain a valid typed probe while still testing live unknown/conflict classification, so compatibility was not obtained by weakening the new controls
 - Remaining issues: the official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; the repository-owned metadata test and a dependency-free equivalent frontmatter validator pass, `SKILL.md` remains 96 lines, and all runtime/schema/invocation/dogfood checks pass; immutable implementation anchor is still pending
 - Next safe action: commit the MK-202 implementation, rerun all 258 tests and acceptance gates against the immutable commit, append DEV-0007 CLOSE with its SHA, then commit and push the close record before MK-301
+
+---
+
+## 2026-08-18 · DEV-0007 · MK-202 · CLOSE
+
+- Status: complete
+- Baseline: `2e9a59b9cec2a3654a61d7b3c373068bdce1ea09`
+- Anchor: `1559561882e100e50f05d721af54e73dad4ce650`
+- Supersedes: none
+- Scope: ST-2021 through ST-2026 delivered; executable work-scoped risk policy version 1 now provides monotonic classification, mode/domain gates, exact Strict decisions, pre/post runtime readbacks, typed resource probes, retained lease evidence, independent current-anchor audit checkpoints, cold semantic evidence validation, deterministic CLI/status/recovery output, active documentation, and legacy compatibility
+- Non-goals: unchanged; no probabilistic scorer, remote policy service, authentication system, background scheduler, arbitrary probe plugin, quota billing, gate waiver, deployment automation, or kernel weakening was introduced
+- Risk: strict; accepted only after immutable-anchor readback proved core anchors, independent quality, mandatory gates, loop separation, User authority, typed evidence validity, append atomicity, and historical replay remain enforced
+- Dependencies: MK-101 through MK-201 complete; DEV-0007 START, fixed policy decisions, 34-test primary red baseline, five supplementary red review tests, fixture migration, and implementation-complete UPDATE satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, focused risk suite, complete regression, compilation, dogfood validate/truth/recover/risk policy, deterministic CLI reference, schema/runtime/replay convergence, Skill metadata and equivalent validation, legacy replay, append-only planning, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor; 39 focused risk-policy tests passed; all 258 tests passed with 0 failures, 0 errors, and 0 skips; compileall passed; dogfood validate returned no errors; truth was operational with six activation-verified sources, no gaps, and no unverified active source; recovery reported no work, unknown, or conflict and exposed policy version 1; risk readback returned ordered Light/Standard/Strict modes and nine Strict domains; CLI reference, metadata consistency, equivalent Skill validation, and `git diff HEAD^ HEAD --check` passed
+- Tests: all 39 DEV-0007 tests and all 219 prior tests pass against the exact anchor; coverage includes automatic escalation, mandatory/mode/domain gates, decision scope, revoked decisions, readback freshness and kind, resource probe retention, audit independence and evidence revalidation, atomic failures, cold-start semantic checks, CLI/schema/replay exchange, active truth markers, dogfood, and legacy behavior
+- Readback: anchor contains 15 changed files with 1536 insertions and 33 deletions, including the 680-line risk-policy suite; the worktree was clean before this CLOSE append; the anchor preserves a 96-line progressively disclosed `SKILL.md`
+- Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned metadata, equivalent frontmatter, runtime, schema, invocation, dogfood, recovery, risk, and append-only checks pass
+- Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head contains both the implementation anchor and CLOSE commit, then begin MK-301 with a new test-first START record
