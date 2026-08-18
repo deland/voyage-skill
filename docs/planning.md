@@ -2189,3 +2189,22 @@ active → retired | superseded
 - Readback: truth is operational with six activation-verified sources and decision-log version 3; recovery has zero unknown/conflicts/blocks/leases; `SKILL.md` remains progressively disclosed at 114 lines; the source-install baseline remains intentionally unfixed for RW-101
 - Remaining issues: create and verify the immutable RW-000 implementation commit, append CLOSE, then begin RW-101 with a complete artifact build/install test matrix
 - Next safe action: commit the RW-000 implementation, rerun all 13 focused and 337 repository tests plus acceptance gates against the exact SHA, then append DEV-0010 CLOSE
+
+---
+
+## 2026-08-19 · DEV-0010 · RW-000 · CLOSE
+
+- Status: complete
+- Baseline: `417db699f87d0f768a4771a849c8759d601bf924`
+- Anchor: `533cb7b1526b2868423bb1f58f0a6cb87773fa61`
+- Supersedes: none
+- Scope: delivered the registered D-0003 distribution authority, active two-surface product and operations contract, distribution-neutral Skill entry, version-converged decisions truth, and reusable standard-library black-box distribution test harness
+- Non-goals: unchanged; no packaging build repair, wheel/source artifact, CLI version command, external project lifecycle, historical upgrade fixture, release evidence manifest, remote publication, extension enablement, or runtime state-machine change was introduced
+- Risk: light; the exact anchor changes contracts and tests only, confines generated work outside the repository, and preserves User publication authority
+- Dependencies: PLAN-0002 and DEV-0010 START, complete red baseline, ST-0002 6/6, 324 prior-test regression, supplemental truth-version red guard, and implementation-complete UPDATE satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 13 focused tests, complete 337-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, decision truth version readback, planning append-only history, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 13 RW-000 tests and all 337 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional acceptance gate passed
+- Tests: initial 12-test red was 3 pass, 3 fail, 6 errors; the helper subtask passed 6/6 and all prior 324 tests; the additive decision-version test failed on registry 2 versus index 3 before its fix; final focused and full suites passed against the exact commit
+- Readback: project stage is operational; all six truth sources are activation-verified; decision-log reads version 3; recovery reports zero unknown, conflicts, blocks, or leases; `SKILL.md` is 114 lines and official validation passes; no build artifact or temporary environment exists in the source tree
+- Remaining issues: the clean source-install baseline still fails without wheel build tooling by design; RW-101 must define and implement the artifact build/install contract before README installation claims are accepted as proven
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-000 anchor, then start RW-101 with its complete test matrix before changing packaging or CLI behavior
