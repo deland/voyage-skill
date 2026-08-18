@@ -13,10 +13,13 @@ from .core import (
     active_leases,
     append_event,
     current_state,
+    check_graph,
+    derive_graph,
     disable_extension,
     enable_extension,
     extension_catalog_view,
     extension_status,
+    graph_path,
     initialize_project,
     load_evidence,
     load_json,
@@ -108,6 +111,14 @@ def build_parser() -> argparse.ArgumentParser:
     risk_sub.add_parser("policy", help="Show the versioned light, standard, and strict policy")
     risk_status_parser = risk_sub.add_parser("status", help="Show effective risk and requirements for one work item")
     risk_status_parser.add_argument("work_id")
+
+    graph = sub.add_parser("graph", help="Derive and inspect the optional read-only runtime graph")
+    graph_sub = graph.add_subparsers(dest="graph_command", required=True)
+    graph_sub.add_parser("derive", help="Derive a deterministic graph from registered project inputs")
+    graph_sub.add_parser("check", help="Check derived graph integrity and references")
+    graph_path_parser = graph_sub.add_parser("path", help="Find one deterministic directed shortest path")
+    graph_path_parser.add_argument("source")
+    graph_path_parser.add_argument("target")
 
     work = sub.add_parser("work", help="Operate work items")
     work_sub = work.add_subparsers(dest="work_command", required=True)
@@ -533,6 +544,19 @@ def handle_risk(paths, args) -> None:
         emit(risk_status(paths, args.work_id))
 
 
+def handle_graph(paths, args) -> int:
+    if args.graph_command == "derive":
+        emit(derive_graph(paths))
+        return 0
+    if args.graph_command == "check":
+        result = check_graph(paths)
+        emit(result)
+        return 0 if result["valid"] else 1
+    result = graph_path(paths, args.source, args.target)
+    emit(result)
+    return 0 if result["found"] else 1
+
+
 def run(args: argparse.Namespace) -> int:
     if args.command == "init":
         paths = initialize_project(args.root, args.project_id, args.truth_registry)
@@ -570,6 +594,8 @@ def run(args: argparse.Namespace) -> int:
         handle_extension(paths, args)
     elif args.command == "risk":
         handle_risk(paths, args)
+    elif args.command == "graph":
+        return handle_graph(paths, args)
     elif args.command == "gate":
         append_from_args(
             paths, args, event_type="gate.recorded", subject=args.work,

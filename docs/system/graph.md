@@ -42,8 +42,9 @@ provenance, risk, evidence references, and optional supersession reference.
 The immutable version-1 catalog contains `advanced-audit`, `channel-tracking`,
 `environment-control`, `quota-cost`, `advanced-rules`, and `derived-graph`.
 `advanced-audit`, `channel-tracking`, and `environment-control` are available;
-the remaining entries are reserved and cannot be enabled before their behavior
-is implemented.
+`derived-graph` is also available as a read-only projection extension. The
+`quota-cost` and `advanced-rules` entries remain reserved and cannot be enabled
+before their behavior is implemented.
 
 `advanced-audit` gates `audit.finding`. `channel-tracking` adds node `channel`,
 edge `acknowledged-by`, and its sent/acknowledged/started events.
@@ -57,6 +58,37 @@ decision and catalog version. Disabled history remains replayable. Projects
 without the explicit initialization marker remain legacy-compatible and do not
 gain invented extension state.
 <!-- extension-contract:end -->
+
+## Derived runtime graph
+
+<!-- derived-graph-contract:start -->
+Derived graph exchange `schema_version` 1 is available only after the
+`derived-graph` extension is explicitly enabled. It is a read-only disposable
+view derived from the manifest-resolved truth registry, ledger, graph,
+resources, gates, and content-addressed evidence. It is not a source of truth.
+Identical registered input produces the same `source_fingerprints`, sorted
+`nodes`, sorted `edges`, and overall fingerprint; no wall-clock or session field
+is included.
+
+Every node records its namespaced ID, effective type, status, scope, authority,
+risk, evidence, provenance, supersession, and deterministic attributes. Every
+edge records its content-derived ID, effective type, source, target, status,
+authority, evidence, provenance, and deterministic attributes. The projection
+covers project truth, loop bindings, principals, decisions, work dependencies,
+all delivery attempts, immutable anchors, evidence, gates, resources, leases,
+rules, blocks, appeal targets, and explicit external anchors.
+
+Consistency issue codes are `duplicate-node-id`, `duplicate-edge-id`,
+`unknown-node-type`, `unknown-edge-type`, `dangling-edge`,
+`dangling-reference`, `dependency-cycle`, `invalid-anchor`,
+`orphan-active-node`, `unresolvable-block`, and `project-invalid`. Checking may
+diagnose hash-consistent damaged dependency payloads without treating a partial
+view as valid. Paths are directed deterministic shortest paths.
+
+There is no graph database, no cache or persisted index, no graph UI, and no
+writable graph API. Disabling the extension removes query access without
+altering the ledger or deleting extension history.
+<!-- derived-graph-contract:end -->
 
 Every edge names its endpoints, preconditions, creating permission, required
 evidence, invalidation conditions, and failure transition.

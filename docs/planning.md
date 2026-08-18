@@ -1641,3 +1641,138 @@ active → retired | superseded
 - Readback: anchor contains 15 changed files with 1536 insertions and 33 deletions, including the 680-line risk-policy suite; the worktree was clean before this CLOSE append; the anchor preserves a 96-line progressively disclosed `SKILL.md`
 - Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned metadata, equivalent frontmatter, runtime, schema, invocation, dogfood, recovery, risk, and append-only checks pass
 - Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head contains both the implementation anchor and CLOSE commit, then begin MK-301 with a new test-first START record
+
+---
+
+## 2026-08-18 · DEV-0008 · MK-301 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `cd0416c9a9b1a89eb204d3507f2cf6f74cb0bdc4`
+- Anchor: pending
+- Supersedes: none
+- Scope: make the reserved `derived-graph` catalog entry available through explicit extension governance; derive a deterministic read-only graph from manifest/truth registry, ledger, resource/gate definitions, and content-addressed evidence; add structural consistency checks and deterministic path queries; expose `voyage graph derive`, `voyage graph check`, and `voyage graph path <from> <to>`
+- Non-goals: no graph database, persisted index or cache, graph UI, writable graph API, event-ledger replacement, probabilistic inference, arbitrary query language, remote graph service, background monitor, or new authoritative state
+- Risk: standard; commands are read-only, but an incorrect projection or consistency result could hide a blocked path, mislabel an invalid anchor, or encourage work from a false graph view
+- Dependencies: MK-104 classified recovery, MK-201 extension lifecycle, MK-202 executable risk/readback semantics, clean local and remote baseline at the SHA above
+- Acceptance gates: all ST-3011 through ST-3016 tests below are added before product implementation and observed failing for the documented gaps; every subtask passes its focused tests before the next begins; final full regression, compileall, dogfood validate/truth/recover/extension status, CLI reference, derived-graph schema, append-only planning, read-only filesystem/ledger checks, legacy compatibility, and diff hygiene pass
+- Actual result: pending
+- Tests: ST-3011 through ST-3016 defined below
+- Readback: `derived-graph` is currently reserved, no graph command or derived exchange schema exists, runtime relationships remain dispersed across replay state and event payloads, and no generic path or graph consistency report is available
+- Remaining issues: extension access, deterministic exchange model, complete node/edge projection, structural checks, path semantics, CLI/schema/docs/Skill convergence, and dogfood behavior remain unimplemented
+- Next safe action: add the complete 32-test MK-301 suite without product edits, capture the red baseline, then implement ST-3011 only
+
+### DEV-0008 固定派生图决策
+
+1. `derived-graph` remains an optional extension and becomes catalog-available at version `1.0.0`. Every explicit or legacy-compatible project must append an exact scoped User decision and `extension.enabled` event before graph queries; legacy history never fabricates enabled state.
+2. `graph derive`, `graph check`, and `graph path` are read-only. They never append an event, update a manifest, create a cache/index, or write a generated graph file. Disable immediately removes query access without deleting history.
+3. Derived graph exchange version 1 contains `schema_version`, `project_id`, `ledger_head`, deterministic source fingerprints, sorted `nodes`, sorted `edges`, and one overall fingerprint. It contains no wall-clock generation timestamp, session field, or nondeterministic ordering.
+4. Every node has a namespaced stable ID, kernel/effective node type, status, scope, authority, risk, evidence references, provenance, optional supersession, and deterministic attributes. Every edge has a content-derived stable ID, effective edge type, source, target, status, authority, evidence, provenance, and deterministic attributes.
+5. The only derivation inputs are project files resolved by the manifest: active truth registry, append-only ledger, graph/resource/gate definitions, and content-addressed evidence. Chat memory, summaries, worker claims, and unregistered files are never graph facts.
+6. Projection covers project, four loop bindings, principals, truth sources, User decisions, work and dependencies, all delivery attempts, immutable anchors, referenced/stored evidence, gates/results, resources/leases, rules/supersession, blocks/appeal targets, and explicit external dependency anchors.
+7. Work dependency edges point from dependent work to prerequisite work or explicit external anchor. `graph path` uses directed breadth-first search, sorted edge order, and returns the deterministic shortest path. Unknown endpoints are errors; known disconnected endpoints return `found: false` without mutation.
+8. `graph check` returns sorted versioned issues with severity, code, subject, related IDs, and message. Errors include duplicate IDs, unknown types, dangling endpoints/internal dependencies, dependency cycles, invalid immutable anchors, orphan active nodes, and active blocks without an independent resolution target. Findings make CLI check exit 1 with JSON, while usage/project-access errors exit 2.
+9. Graph checking must still diagnose hash-consistent damaged work dependency payloads even when normal replay would reject them. It may return a partial diagnostic result, but it must never treat that partial view as valid or authoritative.
+10. Active orphan detection uses reachability from the single project node over the undirected form of graph edges. Stored but not yet consumed evidence is non-active and may remain disconnected without failing the check.
+11. An active block has a resolution path only when it preserves a non-empty unblock condition and names an appeal target different from the blocking actor. The graph does not claim the appeal succeeds; it only proves a structurally independent target exists.
+12. The derived view is disposable. Deleting all hypothetical output leaves project truth unchanged, and identical registered inputs reproduce byte-identical canonical JSON and the same fingerprint.
+
+### ST-3011 · 扩展生命周期与只读访问边界
+
+实现前测试用例：
+
+1. `derived_graph_catalog_is_available_with_stable_empty_additive_contract`：目录仍为六项，`derived-graph` 版本为 1.0.0、available，且不伪造新事件、节点、边或门禁类型。
+2. `graph_queries_require_explicit_enabled_extension`：全新 explicit 项目和 legacy-compatible 项目均拒绝 derive/check/path，且 ledger bytes 不变。
+3. `derived_graph_enable_requires_exact_user_scope`：缺失、撤销、错误 action/project/extension/version 的 User decision 均不能开放查询。
+4. `disable_revokes_graph_query_access_without_deleting_history`：启用后可查询，停用后立即拒绝，enable/disable 历史仍可恢复。
+5. `graph_access_checks_do_not_create_control_files_or_events`：成功和失败的访问检查均不创建 graph cache/index，不追加事件。
+
+### ST-3012 · 稳定派生合同与完整节点边投影
+
+实现前测试用例：
+
+1. `derive_is_byte_deterministic_and_fingerprint_bound_to_registered_inputs`：相同输入两次 canonical JSON 完全一致；ledger 或已注册定义改变后 fingerprint 改变。
+2. `derive_projects_project_truth_loops_principals_decisions_and_work`：项目、active truth、四 loop、事件 actor、User decision 和 work 节点均具有完整固定字段与可追溯 provenance。
+3. `derive_traces_every_delivery_anchor_evidence_and_gate_result`：所有交付尝试、当前/旧 anchor、执行/质量/门禁 evidence 与 verdict 可沿边追溯，不把旧 verdict 转移到新 anchor。
+4. `derive_traces_resources_historical_leases_and_release_state`：资源定义、active/released lease、holder、work、probe evidence 和 release 关系均保留。
+5. `derive_traces_rules_supersession_blocks_and_appeal_targets`：规则状态/supersession 与 block→work、block→independent appeal target 关系完整。
+6. `derived_ids_types_sorting_and_schema_are_exact`：node/edge ID 唯一稳定，类型属于 effective contract，节点/边排序固定，version-1 derived schema 接受输出并拒绝未知字段。
+
+### ST-3013 · 一致性检查与损坏输入诊断
+
+实现前测试用例：
+
+1. `healthy_derived_graph_has_zero_errors_and_stable_summary`：完整合法项目 check 为 valid，错误计数为零且摘要确定。
+2. `check_reports_hash_consistent_dangling_internal_dependency`：重算哈希链后的未知内部 work dependency 返回 `dangling-reference`，而非 traceback 或笼统 replay 异常。
+3. `check_reports_canonical_dependency_cycle`：损坏但哈希一致的 A→B→A 依赖返回一次规范化 `dependency-cycle` 路径。
+4. `check_revalidates_current_immutable_anchor`：删除、篡改或错误 kind 的当前 anchor 返回 `invalid-anchor`，旧 superseded anchor 单独标识而不冒充当前交付。
+5. `check_reports_orphan_active_node_and_dangling_edge`：传入损坏派生视图时检测不可达 active 对象与缺失端点，stored 未消费 evidence 不误报。
+6. `check_reports_active_block_without_independent_resolution_target`：appeal target 缺失或等于 blocker 时返回 `unresolvable-block`，独立 target 通过。
+
+### ST-3014 · 确定性路径查询
+
+实现前测试用例：
+
+1. `path_returns_deterministic_shortest_project_to_current_anchor_route`：project→work→delivery→anchor 返回稳定最短节点/边序列。
+2. `path_traces_work_dependency_to_prerequisite`：dependent work 到 prerequisite 的 directed path 使用 `depends-on` 边。
+3. `path_traces_block_to_work_and_independent_appeal_target`：block 可分别到达被阻塞 work 与 appeal principal。
+4. `path_known_but_disconnected_returns_not_found_without_mutation`：已知不连通端点返回 `found: false`、空路径且不写账本/文件。
+5. `path_unknown_endpoint_is_deterministic_error`：未知 from/to 明确指出端点，不退化为 KeyError 或空成功。
+
+### ST-3015 · CLI、Schema、退出码与原子只读性
+
+实现前测试用例：
+
+1. `graph_cli_reference_contains_all_leaf_commands_once`：argparse 与权威 runbook 各精确包含 derive/check/path 一次。
+2. `graph_cli_derive_and_path_emit_stable_json`：CLI 输出与 core API canonical 内容一致，重复调用稳定。
+3. `graph_cli_check_uses_exit_one_for_findings_and_json_stdout`：一致性 finding 返回 1 和结构化 JSON；无 traceback；访问/参数错误仍返回 2。
+4. `derived_graph_schema_is_exercised_by_repository_contract_tests`：新增 schema 有正反实例，加入“每份 schema 均被测试”守卫。
+5. `all_graph_commands_are_read_only_across_ledger_and_control_tree`：三条命令成功、not-found、finding 路径前后 ledger bytes 与 control-tree 内容摘要完全相同。
+
+### ST-3016 · Active 文档、Skill、dogfood 与 legacy
+
+实现前测试用例：
+
+1. `system_truth_documents_exact_derived_graph_contract_and_issue_codes`：active system truth 描述版本、来源、节点/边字段、只读边界和全部错误码。
+2. `runbook_documents_enable_derive_check_path_and_exit_semantics`：active operations truth 描述显式 enable、三命令、退出码、无缓存和损坏输入诊断。
+3. `skill_loads_graph_detail_only_for_graph_tasks`：Skill 先查 extension status，再解析 active system/runbook，且不硬编码 graph 文件或数据库。
+4. `dogfood_remains_valid_recoverable_and_does_not_invent_graph_enablement`：仓库 validate/recover 通过，catalog 显示 available，但 legacy-compatible dogfood 未启用且查询拒绝不变更账本。
+5. `docs_and_runtime_reject_graph_database_cache_ui_and_writable_truth_claims`：正式合同与 runtime 均不创建/承诺数据库、缓存、UI、写 API 或第二真源。
+
+---
+
+## 2026-08-18 · DEV-0008 · MK-301 · UPDATE
+
+- Status: in-progress; red baseline captured
+- Baseline: `cd0416c9a9b1a89eb204d3507f2cf6f74cb0bdc4`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 32 ST-3011 through ST-3016 test methods added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0008 START matrix and fixed derived-graph decisions
+- Acceptance gates: suite must expose reserved extension access, absent derive/check/path APIs and CLI, missing deterministic exchange/schema, absent consistency/path behavior, missing read-only guarantees, and absent active-document/Skill markers before implementation
+- Actual result: expected FAIL; 32 tests ran with 3 assertion failures and 32 errors including subtests
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-skill-pycache python3 -B -m unittest tests.test_derived_graph -v`
+- Readback: `derived-graph` remains reserved; enable fails before scoped decision behavior can be exercised; core has no `derive_graph`, `check_graph`, or `graph_path`; CLI commands, derived schema, reference entries, and documentation markers are absent; failures map to the planned gaps rather than an unrelated regression
+- Remaining issues: all ST-3011 through ST-3016 implementation work remains
+- Next safe action: implement ST-3011 catalog availability and exact enabled-state read access without adding derivation behavior beyond the minimum access boundary; run GraphExtensionAccessTests before ST-3012
+
+---
+
+## 2026-08-18 · DEV-0008 · MK-301 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `cd0416c9a9b1a89eb204d3507f2cf6f74cb0bdc4`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-3011 through ST-3016 implemented; `derived-graph` is now an explicitly governed available extension with deterministic read-only derive, consistency-check, and directed shortest-path queries over registered project inputs
+- Non-goals: unchanged; no graph database, persisted index or cache, graph UI, writable graph API, event-ledger replacement, probabilistic inference, arbitrary query language, remote graph service, background monitor, or new authoritative state was introduced
+- Risk: standard; accepted before commit only after access control, deterministic exchange, registered-source fingerprints, complete projection, damaged-input diagnostics, anchor readback, path stability, schema/CLI convergence, and filesystem/ledger immutability were exercised
+- Dependencies: MK-104, MK-201, MK-202, DEV-0008 fixed decisions, complete 32-test pre-implementation matrix, and captured red baseline satisfied
+- Acceptance gates: focused derived-graph suite, full regression, compilation, dogfood validate/truth/recover/extension status, governed disabled-query rejection, ledger readback, generated CLI reference, derived-graph schema coverage, Skill metadata and equivalent validation, append-only planning, legacy compatibility, and diff hygiene
+- Actual result: PASS before commit; all 32 MK-301 tests passed and the complete 290-test suite passed with 0 failures, 0 errors, and 0 skips; compileall passed; dogfood validate returned no errors; truth remained operational with six activation-verified active sources and no missing domains; recovery reported no work, unknown, or conflict and retained six declared legacy facts; extension status exposed `derived-graph` as available but not enabled in legacy-compatible dogfood; CLI reference and `git diff --check` passed
+- Tests: the 32 tests were written before product implementation and initially produced 3 assertion failures plus 32 errors including subtests; focused completion was ST-3011 5/5, ST-3012 6/6, ST-3013 6/6, ST-3014 5/5, ST-3015 5/5, and ST-3016 5/5; the first complete regression exposed one stale extension-test assumption that every available extension adds events, which was corrected to assert the exact three event-bearing extensions and the empty additive `derived-graph` contract before the final 290/290 pass
+- Readback: identical registered inputs produce sorted version-1 nodes and edges with stable source and overall fingerprints; projection includes truth, loops, principals, decisions, work/dependencies, every delivery and anchor, evidence, gates, resources/leases, rules, blocks/appeals, and external anchors; check reports duplicate/unknown/dangling/cycle/invalid-anchor/orphan/unresolvable/project-invalid findings, including hash-consistent dependencies that normal replay rejects; path uses sorted directed BFS; all graph commands and access failures are read-only
+- Dogfood immutability: `graph derive` without explicit enable returned exit 2 and `derived-graph extension is not enabled`; `.voyage/ledger/events.jsonl` remained SHA-256 `0a6ba5707c289a63cc277efaec5283ba9916a3426d566231c2c33a2c784c40eb` before and after the rejected query, and no cache, index, or generated graph file appeared
+- Remaining issues: the official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; the repository-owned metadata tests and dependency-free equivalent validator pass, `SKILL.md` remains progressively disclosed at 104 lines, and all runtime/schema/invocation/dogfood checks pass; immutable implementation anchor is still pending
+- Next safe action: commit the MK-301 implementation, rerun all 32 focused tests, all 290 repository tests, and acceptance gates against the exact immutable commit, append DEV-0008 CLOSE with its SHA, then commit and push the close record

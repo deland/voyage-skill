@@ -23,8 +23,9 @@ CATALOG_IDS = {
     "advanced-audit", "channel-tracking", "environment-control",
     "quota-cost", "advanced-rules", "derived-graph",
 }
-AVAILABLE_IDS = {"advanced-audit", "channel-tracking", "environment-control"}
+AVAILABLE_IDS = {"advanced-audit", "channel-tracking", "environment-control", "derived-graph"}
 RESERVED_IDS = CATALOG_IDS - AVAILABLE_IDS
+EVENT_EXTENSION_IDS = {"advanced-audit", "channel-tracking", "environment-control"}
 EXPECTED_KERNEL_NODES = {
     "project", "principal", "loop-binding", "truth-source", "decision",
     "work-item", "delivery", "immutable-anchor", "evidence", "gate",
@@ -280,7 +281,15 @@ class ExtensionDisableTests(ExtensionTestCase):
 
 class ExtensionEventGateTests(ExtensionTestCase):
     def test_explicit_project_rejects_extension_events_before_enable(self) -> None:
-        for extension_id in sorted(AVAILABLE_IDS):
+        self.assertEqual(
+            {
+                extension_id
+                for extension_id, contract in core.EXTENSION_CATALOG.items()
+                if contract["availability"] == "available" and contract["event_types"]
+            },
+            EVENT_EXTENSION_IDS,
+        )
+        for extension_id in sorted(EVENT_EXTENSION_IDS):
             with self.subTest(extension_id=extension_id), self.assertRaisesRegex(core.VoyageError, "extension .* is not enabled"):
                 self.extension_event(extension_id)
 
@@ -372,7 +381,7 @@ class ExtensionCliRecoverySchemaTests(ExtensionTestCase):
         extensions = snapshot["extensions"]
         self.assertEqual(extensions["mode"], "explicit")
         self.assertEqual(extensions["extensions"]["channel-tracking"]["status"], "disabled")
-        self.assertIn("derived-graph", extensions["reserved"])
+        self.assertNotIn("derived-graph", extensions["reserved"])
         self.assertNotIn("derived-graph", extensions["enabled"])
 
     def test_extension_events_match_runtime_schema_and_replay(self) -> None:

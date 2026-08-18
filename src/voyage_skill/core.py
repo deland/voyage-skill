@@ -22,6 +22,7 @@ LOOPS = {"execution", "quality", "governance", "audit", "user", "system"}
 RISK_MODE_ORDER = ("light", "standard", "strict")
 RISK_LEVELS = set(RISK_MODE_ORDER)
 RISK_POLICY_VERSION = 1
+DERIVED_GRAPH_SCHEMA_VERSION = 1
 STRICT_RISK_DOMAINS = (
     "credentials", "gate-relaxation", "irreversible", "material-cost",
     "permissions", "persistent-data", "production", "public-external-write",
@@ -100,7 +101,7 @@ EXTENSION_CATALOG = {
         "event_types": (), "node_types": (), "edge_types": (), "gates": (),
     },
     "derived-graph": {
-        "id": "derived-graph", "version": "1.0.0", "availability": "reserved",
+        "id": "derived-graph", "version": "1.0.0", "availability": "available",
         "event_types": (), "node_types": (), "edge_types": (), "gates": (),
     },
 }
@@ -2432,6 +2433,914 @@ def extension_status(paths: ProjectPaths) -> dict[str, Any]:
         "reserved": sorted(key for key, value in EXTENSION_CATALOG.items() if value["availability"] == "reserved"),
         "extensions": extensions,
         "effective_contract": effective_contract(paths),
+    }
+
+
+def _require_derived_graph_enabled(paths: ProjectPaths) -> dict[str, Any]:
+    state = current_state(paths)
+    extension = state["extensions"].get("derived-graph")
+    _require(
+        extension is not None and extension.get("status") == "enabled",
+        "derived-graph extension is not enabled",
+    )
+    return state
+
+
+def _derived_source_fingerprints(paths: ProjectPaths, events: list[dict[str, Any]]) -> dict[str, str]:
+    evidence_files = []
+    evidence_root = paths.evidence / "sha256"
+    if evidence_root.is_dir():
+        for path in sorted(evidence_root.glob("*.json")):
+            evidence_files.append(
+                {
+                    "path": str(path.relative_to(paths.root)),
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            )
+    return {
+        "manifest": content_hash(load_json(paths.manifest)),
+        "truth_registry": content_hash(load_json(paths.truth_registry)),
+        "graph": content_hash(load_json(paths.graph)),
+        "resources": content_hash(load_json(paths.resources)),
+        "gates": content_hash(load_json(paths.gates)),
+        "ledger": content_hash(events),
+        "evidence": content_hash(evidence_files),
+    }
+
+
+def _derived_node(
+    node_id: str,
+    node_type: str,
+    *,
+    status: str,
+    scope: str,
+    authority: str,
+    risk: str = "standard",
+    evidence: list[str] | None = None,
+    provenance: list[str] | None = None,
+    supersedes: str | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": node_id,
+        "type": node_type,
+        "schema_version": DERIVED_GRAPH_SCHEMA_VERSION,
+        "status": status,
+        "scope": scope,
+        "authority": authority,
+        "risk": risk,
+        "evidence": sorted(set(evidence or [])),
+        "provenance": sorted(set(provenance or [])),
+        "supersedes": supersedes,
+        "attributes": deepcopy(attributes or {}),
+    }
+
+
+def _derived_edge(
+    edge_type: str,
+    source: str,
+    target: str,
+    *,
+    status: str = "active",
+    authority: str = "system",
+    evidence: list[str] | None = None,
+    provenance: list[str] | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    body = {
+        "type": edge_type,
+        "schema_version": DERIVED_GRAPH_SCHEMA_VERSION,
+        "source": source,
+        "target": target,
+        "status": status,
+        "authority": authority,
+        "evidence": sorted(set(evidence or [])),
+        "provenance": sorted(set(provenance or [])),
+        "attributes": deepcopy(attributes or {}),
+    }
+    return {"id": f"edge:{content_hash(body)}", **body}
+
+
+def _derive_graph_body(paths: ProjectPaths, state: dict[str, Any]) -> dict[str, Any]:
+    events = load_events(paths.ledger)
+    registry = load_json(paths.truth_registry)
+    resources = load_json(paths.resources)
+    gates = load_json(paths.gates)
+    project_id = state["project_id"]
+    project_node_id = f"project:{project_id}"
+    nodes: dict[str, dict[str, Any]] = {}
+    edges: dict[str, dict[str, Any]] = {}
+
+    status_priority = {
+        "missing": 0,
+        "stored": 1,
+        "referenced": 2,
+        "superseded": 3,
+        "current": 4,
+    }
+
+    def add_node(node: dict[str, Any]) -> None:
+        existing = nodes.get(node["id"])
+        if existing is None:
+            nodes[node["id"]] = node
+            return
+        _require(existing["type"] == node["type"], f"derived node type collision: {node['id']}")
+        existing["evidence"] = sorted(set(existing["evidence"]) | set(node["evidence"]))
+        existing["provenance"] = sorted(set(existing["provenance"]) | set(node["provenance"]))
+        if status_priority.get(node["status"], 0) > status_priority.get(existing["status"], 0):
+            existing["status"] = node["status"]
+        if existing.get("supersedes") is None and node.get("supersedes") is not None:
+            existing["supersedes"] = node["supersedes"]
+        existing["attributes"].update(deepcopy(node["attributes"]))
+
+    def add_edge(edge: dict[str, Any]) -> None:
+        edges[edge["id"]] = edge
+
+    def add_principal(principal_id: str, *, provenance: str, loop: str | None = None) -> str:
+        node_id = f"principal:{principal_id}"
+        add_node(
+            _derived_node(
+                node_id,
+                "principal",
+                status="known",
+                scope=project_id,
+                authority=principal_id,
+                provenance=[provenance],
+                attributes={},
+            )
+        )
+        add_edge(_derived_edge("governs", project_node_id, node_id, provenance=[provenance]))
+        if loop in KERNEL_LOOPS:
+            add_edge(
+                _derived_edge(
+                    "bound-to-loop",
+                    node_id,
+                    f"loop:{loop}",
+                    authority=principal_id,
+                    provenance=[provenance],
+                )
+            )
+        return node_id
+
+    def add_evidence(evidence_id: str, *, status: str, provenance: str) -> str:
+        node_id = f"evidence:{evidence_id}"
+        document_path = None
+        kind = None
+        if isinstance(evidence_id, str):
+            match = EVIDENCE_ID_PATTERN.fullmatch(evidence_id)
+            if match is not None:
+                candidate = paths.evidence / "sha256" / f"{match.group(1)}.json"
+                if candidate.is_file():
+                    document_path = str(candidate.relative_to(paths.root))
+                    try:
+                        document = load_json(candidate)
+                    except VoyageError:
+                        document = {}
+                    kind = document.get("kind") if isinstance(document.get("kind"), str) else None
+        add_node(
+            _derived_node(
+                node_id,
+                "evidence",
+                status=status if document_path is not None else "missing",
+                scope=project_id,
+                authority="system",
+                evidence=[evidence_id],
+                provenance=[provenance] + ([document_path] if document_path else []),
+                attributes={"evidence_id": evidence_id, "kind": kind},
+            )
+        )
+        return node_id
+
+    add_node(
+        _derived_node(
+            project_node_id,
+            "project",
+            status=state["project_stage"],
+            scope=project_id,
+            authority="governance",
+            provenance=[str(paths.manifest.relative_to(paths.root)), state["last_event"]],
+            attributes={"extension_mode": state["extension_mode"]},
+        )
+    )
+
+    for loop in KERNEL_LOOPS:
+        loop_id = f"loop:{loop}"
+        add_node(
+            _derived_node(
+                loop_id,
+                "loop-binding",
+                status="active",
+                scope=project_id,
+                authority=loop,
+                provenance=[str(paths.graph.relative_to(paths.root))],
+                attributes={"loop": loop},
+            )
+        )
+        add_edge(_derived_edge("governs", project_node_id, loop_id, provenance=[str(paths.graph.relative_to(paths.root))]))
+
+    for event in events:
+        add_principal(event["actor"], provenance=event["event_id"], loop=event.get("loop"))
+
+    for source in registry.get("sources", []):
+        if not isinstance(source, dict) or not isinstance(source.get("id"), str):
+            continue
+        source_id = f"truth:{source['id']}"
+        activation = state["truth_activations"].get(source["id"], {})
+        supersedes = activation.get("supersedes")
+        provenance = [str(paths.truth_registry.relative_to(paths.root)), source.get("path", "")]
+        if activation.get("event_id"):
+            provenance.append(activation["event_id"])
+        add_node(
+            _derived_node(
+                source_id,
+                "truth-source",
+                status=source.get("status", "unknown"),
+                scope=source.get("domain", project_id),
+                authority=source.get("authority", "unknown"),
+                provenance=provenance,
+                supersedes=f"truth:{supersedes}" if supersedes else None,
+                attributes={
+                    "domain": source.get("domain"),
+                    "path": source.get("path"),
+                    "version": source.get("version"),
+                },
+            )
+        )
+        add_edge(_derived_edge("governs", project_node_id, source_id, provenance=provenance))
+        if supersedes:
+            add_edge(_derived_edge("supersedes", source_id, f"truth:{supersedes}", provenance=provenance))
+
+    for decision_id, decision in state["decisions"].items():
+        node_id = f"decision:{decision_id}"
+        payload = decision.get("payload", {})
+        add_node(
+            _derived_node(
+                node_id,
+                "decision",
+                status="revoked" if decision.get("revoked") else "active",
+                scope=project_id,
+                authority=decision.get("actor", "user"),
+                provenance=[decision["event_id"]] + ([decision["revoked_event"]] if decision.get("revoked_event") else []),
+                attributes={"decision": payload.get("decision"), "scope": deepcopy(payload.get("scope"))},
+            )
+        )
+        add_edge(_derived_edge("governs", project_node_id, node_id, provenance=[decision["event_id"]]))
+
+    work_events: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        if event["type"].startswith("work.") or event["type"] in {"quality.passed", "quality.rejected", "gate.recorded", "audit.checked"}:
+            work_events.setdefault(event["subject"], []).append(event)
+
+    for work_id, work in state["works"].items():
+        related = work_events.get(work_id, [])
+        created = next((event for event in related if event["type"] == "work.created"), None)
+        work_node_id = f"work:{work_id}"
+        add_node(
+            _derived_node(
+                work_node_id,
+                "work-item",
+                status=work["status"],
+                scope=work["scope"],
+                authority="governance",
+                risk=work["risk"],
+                evidence=(created or {}).get("evidence", []),
+                provenance=[event["event_id"] for event in related],
+                attributes={
+                    "title": work["title"],
+                    "acceptance": deepcopy(work["acceptance"]),
+                    "required_resources": deepcopy(work["required_resources"]),
+                    "risk_assessment": deepcopy(work.get("risk_assessment")),
+                },
+            )
+        )
+        add_edge(_derived_edge("governs", project_node_id, work_node_id, provenance=[(created or {}).get("event_id", "")]))
+        if work.get("executor"):
+            add_edge(
+                _derived_edge(
+                    "assigned-to",
+                    work_node_id,
+                    add_principal(work["executor"], provenance=work.get("delivery", {}).get("event_id", "work-state"), loop="execution"),
+                    authority="execution",
+                    provenance=[work.get("delivery", {}).get("event_id", "work-state")],
+                )
+            )
+        dependencies = (created or {}).get("payload", {}).get("dependencies", [])
+        for dependency in dependencies if isinstance(dependencies, list) else []:
+            if dependency.startswith("external:"):
+                target = dependency
+                add_node(
+                    _derived_node(
+                        target,
+                        "external-anchor",
+                        status="referenced",
+                        scope=work_id,
+                        authority="external",
+                        provenance=[(created or {}).get("event_id", "")],
+                        attributes={"reference": dependency},
+                    )
+                )
+            else:
+                target = f"work:{dependency}"
+            add_edge(
+                _derived_edge(
+                    "depends-on",
+                    work_node_id,
+                    target,
+                    authority="governance",
+                    provenance=[(created or {}).get("event_id", "")],
+                )
+            )
+        for event in related:
+            decision_id = event.get("authorization")
+            if isinstance(decision_id, str) and decision_id:
+                add_edge(
+                    _derived_edge(
+                        "authorized-by",
+                        work_node_id,
+                        f"decision:{decision_id}",
+                        authority=event["loop"],
+                        provenance=[event["event_id"]],
+                    )
+                )
+
+    delivery_counts: dict[str, int] = {}
+    for event in events:
+        if event["type"] != "work.delivered":
+            continue
+        work_id = event["subject"]
+        delivery_counts[work_id] = delivery_counts.get(work_id, 0) + 1
+        delivery_id = f"delivery:{event['event_id']}"
+        work = state["works"].get(work_id, {})
+        current_event = (work.get("delivery") or {}).get("event_id")
+        delivery_status = "current" if current_event == event["event_id"] else "superseded"
+        add_node(
+            _derived_node(
+                delivery_id,
+                "delivery",
+                status=delivery_status,
+                scope=work_id,
+                authority=event["actor"],
+                risk=event["risk"],
+                evidence=event.get("evidence", []),
+                provenance=[event["event_id"]],
+                attributes={"attempt": delivery_counts[work_id]},
+            )
+        )
+        add_edge(
+            _derived_edge(
+                "delivered-via",
+                f"work:{work_id}",
+                delivery_id,
+                status=delivery_status,
+                authority="execution",
+                provenance=[event["event_id"]],
+            )
+        )
+        anchor = event.get("anchor")
+        if isinstance(anchor, str) and anchor:
+            anchor_id = f"anchor:{anchor}"
+            add_node(
+                _derived_node(
+                    anchor_id,
+                    "immutable-anchor",
+                    status=delivery_status,
+                    scope=work_id,
+                    authority=event["actor"],
+                    risk=event["risk"],
+                    evidence=[anchor],
+                    provenance=[event["event_id"]],
+                    attributes={"evidence_id": anchor, "work_id": work_id},
+                )
+            )
+            add_edge(_derived_edge("anchored-at", delivery_id, anchor_id, status=delivery_status, provenance=[event["event_id"]]))
+            evidence_node = add_evidence(anchor, status="referenced", provenance=event["event_id"])
+            add_edge(_derived_edge("validated-by", anchor_id, evidence_node, status=delivery_status, evidence=[anchor], provenance=[event["event_id"]]))
+        for evidence_id in event.get("evidence", []):
+            evidence_node = add_evidence(evidence_id, status="referenced", provenance=event["event_id"])
+            add_edge(_derived_edge("produces", delivery_id, evidence_node, evidence=[evidence_id], provenance=[event["event_id"]]))
+
+    for definition in gates.get("gates", []):
+        if not isinstance(definition, dict) or not isinstance(definition.get("id"), str):
+            continue
+        gate_id = f"gate:{definition['id']}"
+        add_node(
+            _derived_node(
+                gate_id,
+                "gate",
+                status="active",
+                scope=project_id,
+                authority=definition.get("required_loop", "quality"),
+                provenance=[str(paths.gates.relative_to(paths.root))],
+                attributes=definition,
+            )
+        )
+        add_edge(_derived_edge("governs", project_node_id, gate_id, provenance=[str(paths.gates.relative_to(paths.root))]))
+
+    for event in events:
+        if event["type"] not in {"quality.passed", "quality.rejected", "gate.recorded", "audit.checked"}:
+            continue
+        gate_name = (
+            event.get("payload", {}).get("gate_id")
+            if event["type"] == "gate.recorded"
+            else "independent-quality" if event["type"].startswith("quality.")
+            else None
+        )
+        if gate_name:
+            verdict = "pass" if event["type"] in {"quality.passed", "gate.recorded"} else "reject"
+            add_edge(
+                _derived_edge(
+                    "validated-by",
+                    f"work:{event['subject']}",
+                    f"gate:{gate_name}",
+                    status=verdict,
+                    authority=event["loop"],
+                    evidence=event.get("evidence", []),
+                    provenance=[event["event_id"]],
+                    attributes={"anchor": event.get("anchor"), "counts": deepcopy(event.get("payload", {}).get("counts"))},
+                )
+            )
+        for evidence_id in event.get("evidence", []):
+            add_evidence(evidence_id, status="referenced", provenance=event["event_id"])
+
+    for definition in resources.get("resources", []):
+        if not isinstance(definition, dict) or not isinstance(definition.get("id"), str):
+            continue
+        resource_id = f"resource:{definition['id']}"
+        add_node(
+            _derived_node(
+                resource_id,
+                "resource",
+                status="registered",
+                scope=project_id,
+                authority="governance",
+                risk=definition.get("risk", "standard"),
+                provenance=[str(paths.resources.relative_to(paths.root))],
+                attributes=definition,
+            )
+        )
+        add_edge(_derived_edge("governs", project_node_id, resource_id, provenance=[str(paths.resources.relative_to(paths.root))]))
+
+    lease_events: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        if event["type"] in {"resource.claimed", "resource.released", "resource.recovered"}:
+            lease_id = event.get("payload", {}).get("lease_id")
+            if isinstance(lease_id, str):
+                lease_events.setdefault(lease_id, []).append(event)
+    for lease_id, lease in state["leases"].items():
+        related = lease_events.get(lease_id, [])
+        node_id = f"lease:{lease_id}"
+        status = "active" if lease.get("active") else "released"
+        add_node(
+            _derived_node(
+                node_id,
+                "lease",
+                status=status,
+                scope=lease["work_id"],
+                authority=lease["holder"],
+                evidence=lease.get("probe_evidence", []),
+                provenance=[event["event_id"] for event in related],
+                attributes={
+                    "work_id": lease["work_id"],
+                    "resource_id": lease["resource_id"],
+                    "holder": lease["holder"],
+                    "expires_at": lease["expires_at"],
+                },
+            )
+        )
+        add_edge(_derived_edge("claims", f"work:{lease['work_id']}", node_id, status=status, evidence=lease.get("probe_evidence", []), provenance=[event["event_id"] for event in related]))
+        add_edge(_derived_edge("claims", node_id, f"resource:{lease['resource_id']}", status=status, evidence=lease.get("probe_evidence", []), provenance=[event["event_id"] for event in related]))
+        if not lease.get("active"):
+            add_edge(_derived_edge("releases", node_id, f"resource:{lease['resource_id']}", status="released", provenance=[event["event_id"] for event in related]))
+        for evidence_id in lease.get("probe_evidence", []):
+            add_evidence(evidence_id, status="referenced", provenance=related[0]["event_id"] if related else node_id)
+
+    rule_events: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        if event["type"].startswith("rule."):
+            rule_events.setdefault(event["subject"], []).append(event)
+    for rule_id, rule in state["rules"].items():
+        related = rule_events.get(rule_id, [])
+        superseded_by = rule.get("superseded_by")
+        node_id = f"rule:{rule_id}"
+        add_node(
+            _derived_node(
+                node_id,
+                "rule",
+                status=rule["status"],
+                scope=project_id,
+                authority="governance",
+                evidence=[evidence for event in related for evidence in event.get("evidence", [])],
+                provenance=[event["event_id"] for event in related],
+                supersedes=f"rule:{superseded_by}" if superseded_by else None,
+                attributes={key: deepcopy(value) for key, value in rule.items() if key != "status"},
+            )
+        )
+        add_edge(_derived_edge("governs", project_node_id, node_id, provenance=[event["event_id"] for event in related]))
+        if superseded_by:
+            add_edge(_derived_edge("supersedes", node_id, f"rule:{superseded_by}", provenance=[event["event_id"] for event in related]))
+        for event in related:
+            for evidence_id in event.get("evidence", []):
+                add_evidence(evidence_id, status="referenced", provenance=event["event_id"])
+
+    block_events: dict[str, dict[str, Any]] = {}
+    for event in events:
+        if event["type"] == "work.blocked":
+            block_id = event.get("payload", {}).get("block_id") or f"block-{event['event_id']}"
+            block_events[block_id] = event
+    for block_id, block in state["blocks"].items():
+        event = block_events.get(block_id)
+        provenance = [event["event_id"]] if event else []
+        node_id = f"block:{block_id}"
+        add_node(
+            _derived_node(
+                node_id,
+                "block",
+                status="active" if block.get("active") else "resolved",
+                scope=block.get("scope", block["work_id"]),
+                authority=block["actor"],
+                evidence=(event or {}).get("evidence", []),
+                provenance=provenance,
+                attributes={
+                    "work_id": block["work_id"],
+                    "blocker": block["actor"],
+                    "reason": block.get("reason"),
+                    "unblock_condition": block.get("unblock_condition"),
+                    "appeal_to": block.get("appeal_to"),
+                },
+            )
+        )
+        add_edge(_derived_edge("blocks", node_id, f"work:{block['work_id']}", status="active" if block.get("active") else "resolved", evidence=(event or {}).get("evidence", []), provenance=provenance))
+        appeal_to = block.get("appeal_to")
+        if isinstance(appeal_to, str) and appeal_to:
+            target = add_principal(appeal_to, provenance=(event or {}).get("event_id", node_id))
+            add_edge(_derived_edge("escalates-to", node_id, target, status="active" if block.get("active") else "resolved", provenance=provenance))
+        for evidence_id in (event or {}).get("evidence", []):
+            add_evidence(evidence_id, status="referenced", provenance=(event or {}).get("event_id", node_id))
+
+    evidence_root = paths.evidence / "sha256"
+    if evidence_root.is_dir():
+        for path in sorted(evidence_root.glob("*.json")):
+            add_evidence(f"sha256:{path.stem}", status="stored", provenance=str(path.relative_to(paths.root)))
+
+    body = {
+        "schema_version": DERIVED_GRAPH_SCHEMA_VERSION,
+        "project_id": project_id,
+        "ledger_head": state["last_event"],
+        "source_fingerprints": _derived_source_fingerprints(paths, events),
+        "nodes": [nodes[node_id] for node_id in sorted(nodes)],
+        "edges": [edges[edge_id] for edge_id in sorted(edges)],
+    }
+    return body
+
+
+def derive_graph(paths: ProjectPaths) -> dict[str, Any]:
+    state = _require_derived_graph_enabled(paths)
+    body = _derive_graph_body(paths, state)
+    return {**body, "fingerprint": content_hash(body)}
+
+
+def _graph_issue(
+    code: str,
+    subject: str,
+    message: str,
+    *,
+    related: list[str] | None = None,
+    severity: str = "error",
+) -> dict[str, Any]:
+    return {
+        "severity": severity,
+        "code": code,
+        "subject": subject,
+        "related": list(related or []),
+        "message": message,
+    }
+
+
+def _sort_graph_issues(issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    severity_order = {"error": 0, "warning": 1}
+    return sorted(
+        issues,
+        key=lambda item: (
+            severity_order.get(item.get("severity"), 2),
+            item.get("code", ""),
+            item.get("subject", ""),
+            canonical_json(item.get("related", [])),
+        ),
+    )
+
+
+def _derived_graph_enabled_in_events(events: list[dict[str, Any]]) -> bool:
+    enabled = False
+    for event in events:
+        if event.get("subject") != "derived-graph":
+            continue
+        if event.get("type") == "extension.enabled":
+            enabled = True
+        elif event.get("type") == "extension.disabled":
+            enabled = False
+    return enabled
+
+
+def _canonical_dependency_cycles(adjacency: dict[str, set[str]]) -> list[list[str]]:
+    visited: set[str] = set()
+    active: set[str] = set()
+    stack: list[str] = []
+    cycles: set[tuple[str, ...]] = set()
+
+    def canonicalize(path: list[str]) -> tuple[str, ...]:
+        body = path[:-1]
+        rotations = [tuple(body[index:] + body[:index]) for index in range(len(body))]
+        canonical = min(rotations)
+        return canonical + (canonical[0],)
+
+    def visit(node: str) -> None:
+        visited.add(node)
+        active.add(node)
+        stack.append(node)
+        for target in sorted(adjacency.get(node, set())):
+            if target not in visited:
+                visit(target)
+            elif target in active:
+                index = stack.index(target)
+                cycles.add(canonicalize(stack[index:] + [target]))
+        stack.pop()
+        active.remove(node)
+
+    for node in sorted(adjacency):
+        if node not in visited:
+            visit(node)
+    return [list(cycle) for cycle in sorted(cycles)]
+
+
+def _raw_dependency_issues(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    created = {
+        event.get("subject")
+        for event in events
+        if event.get("type") == "work.created" and isinstance(event.get("subject"), str)
+    }
+    adjacency: dict[str, set[str]] = {f"work:{work_id}": set() for work_id in created}
+    issues: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("type") != "work.created" or not isinstance(event.get("subject"), str):
+            continue
+        source = f"work:{event['subject']}"
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        dependencies = payload.get("dependencies", [])
+        if not isinstance(dependencies, list):
+            continue
+        for dependency in dependencies:
+            if not isinstance(dependency, str) or dependency.startswith("external:"):
+                continue
+            target = f"work:{dependency}"
+            if dependency not in created:
+                issues.append(
+                    _graph_issue(
+                        "dangling-reference",
+                        source,
+                        f"internal work dependency does not exist: {target}",
+                        related=[target],
+                    )
+                )
+            else:
+                adjacency[source].add(target)
+    for cycle in _canonical_dependency_cycles(adjacency):
+        issues.append(
+            _graph_issue(
+                "dependency-cycle",
+                cycle[0],
+                "work dependency cycle: " + " -> ".join(cycle),
+                related=cycle,
+            )
+        )
+    return issues
+
+
+def _graph_check_result(
+    *,
+    project_id: str | None,
+    ledger_head: str | None,
+    graph_fingerprint: str | None,
+    issues: list[dict[str, Any]],
+    node_count: int,
+    edge_count: int,
+) -> dict[str, Any]:
+    ordered = _sort_graph_issues(issues)
+    errors = sum(item["severity"] == "error" for item in ordered)
+    warnings = sum(item["severity"] == "warning" for item in ordered)
+    return {
+        "schema_version": DERIVED_GRAPH_SCHEMA_VERSION,
+        "project_id": project_id,
+        "ledger_head": ledger_head,
+        "graph_fingerprint": graph_fingerprint,
+        "valid": errors == 0,
+        "summary": {"errors": errors, "warnings": warnings, "nodes": node_count, "edges": edge_count},
+        "issues": ordered,
+    }
+
+
+def _structural_graph_issues(paths: ProjectPaths, graph: dict[str, Any]) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    node_items = graph.get("nodes", []) if isinstance(graph.get("nodes"), list) else []
+    edge_items = graph.get("edges", []) if isinstance(graph.get("edges"), list) else []
+
+    node_counts: dict[str, int] = {}
+    edge_counts: dict[str, int] = {}
+    for node in node_items:
+        if isinstance(node, dict) and isinstance(node.get("id"), str):
+            node_counts[node["id"]] = node_counts.get(node["id"], 0) + 1
+    for edge in edge_items:
+        if isinstance(edge, dict) and isinstance(edge.get("id"), str):
+            edge_counts[edge["id"]] = edge_counts.get(edge["id"], 0) + 1
+    for node_id, count in sorted(node_counts.items()):
+        if count > 1:
+            issues.append(_graph_issue("duplicate-node-id", node_id, f"node ID occurs {count} times"))
+    for edge_id, count in sorted(edge_counts.items()):
+        if count > 1:
+            issues.append(_graph_issue("duplicate-edge-id", edge_id, f"edge ID occurs {count} times"))
+
+    nodes = {
+        node["id"]: node
+        for node in node_items
+        if isinstance(node, dict) and isinstance(node.get("id"), str)
+    }
+    effective = effective_contract(paths)
+    allowed_nodes = set(effective["node_types"])
+    allowed_edges = set(effective["edge_types"])
+    for node_id, node in sorted(nodes.items()):
+        if node.get("type") not in allowed_nodes:
+            issues.append(_graph_issue("unknown-node-type", node_id, f"node type is not in effective contract: {node.get('type')}"))
+    valid_edges: list[dict[str, Any]] = []
+    for edge in edge_items:
+        if not isinstance(edge, dict) or not isinstance(edge.get("id"), str):
+            continue
+        if edge.get("type") not in allowed_edges:
+            issues.append(_graph_issue("unknown-edge-type", edge["id"], f"edge type is not in effective contract: {edge.get('type')}"))
+        missing = [endpoint for endpoint in (edge.get("source"), edge.get("target")) if endpoint not in nodes]
+        if missing:
+            issues.append(
+                _graph_issue(
+                    "dangling-edge",
+                    edge["id"],
+                    "edge endpoint does not exist: " + ", ".join(str(item) for item in missing),
+                    related=[str(item) for item in missing],
+                )
+            )
+        else:
+            valid_edges.append(edge)
+
+    dependency_adjacency: dict[str, set[str]] = {
+        node_id: set() for node_id, node in nodes.items() if node.get("type") == "work-item"
+    }
+    for edge in valid_edges:
+        if edge.get("type") == "depends-on" and edge.get("source") in dependency_adjacency and edge.get("target") in dependency_adjacency:
+            dependency_adjacency[edge["source"]].add(edge["target"])
+    for cycle in _canonical_dependency_cycles(dependency_adjacency):
+        issues.append(_graph_issue("dependency-cycle", cycle[0], "work dependency cycle: " + " -> ".join(cycle), related=cycle))
+
+    for node_id, node in sorted(nodes.items()):
+        if node.get("type") != "immutable-anchor" or node.get("status") != "current":
+            continue
+        evidence_id = node.get("attributes", {}).get("evidence_id")
+        result = verify_evidence(paths, evidence_id)
+        if result["status"] != "valid" or result["kind"] not in {"git-commit", "artifact-digest"}:
+            subject = f"work:{node.get('attributes', {}).get('work_id')}"
+            reason = "; ".join(result["reasons"]) if result["reasons"] else f"invalid anchor kind: {result['kind']}"
+            issues.append(_graph_issue("invalid-anchor", subject, reason, related=[node_id]))
+
+    adjacency: dict[str, set[str]] = {node_id: set() for node_id in nodes}
+    for edge in valid_edges:
+        source = edge["source"]
+        target = edge["target"]
+        adjacency[source].add(target)
+        adjacency[target].add(source)
+    project_nodes = sorted(node_id for node_id, node in nodes.items() if node.get("type") == "project")
+    reachable: set[str] = set()
+    pending = list(project_nodes[:1])
+    while pending:
+        node_id = pending.pop(0)
+        if node_id in reachable:
+            continue
+        reachable.add(node_id)
+        pending.extend(sorted(adjacency[node_id] - reachable))
+    active_types = {"work-item", "delivery", "immutable-anchor", "gate", "resource", "lease", "rule", "block", "decision", "truth-source"}
+    inactive_statuses = {"closed", "disabled", "missing", "released", "resolved", "retired", "revoked", "stored", "superseded"}
+    for node_id, node in sorted(nodes.items()):
+        if node.get("type") in active_types and node.get("status") not in inactive_statuses and node_id not in reachable:
+            issues.append(_graph_issue("orphan-active-node", node_id, "active node is not reachable from the project node"))
+
+    for node_id, node in sorted(nodes.items()):
+        if node.get("type") != "block" or node.get("status") != "active":
+            continue
+        attributes = node.get("attributes", {})
+        blocker = attributes.get("blocker")
+        appeal_to = attributes.get("appeal_to")
+        condition = attributes.get("unblock_condition")
+        if not isinstance(condition, str) or not condition.strip() or not isinstance(appeal_to, str) or not appeal_to or appeal_to == blocker:
+            issues.append(
+                _graph_issue(
+                    "unresolvable-block",
+                    node_id,
+                    "active block lacks an independent resolution target or unblock condition",
+                    related=[f"principal:{appeal_to}"] if appeal_to else [],
+                )
+            )
+    return issues
+
+
+def check_graph(paths: ProjectPaths, *, graph: dict[str, Any] | None = None) -> dict[str, Any]:
+    events = load_events(paths.ledger)
+    if graph is not None:
+        _require_derived_graph_enabled(paths)
+        raw_issues = _raw_dependency_issues(events)
+        issues = raw_issues + _structural_graph_issues(paths, graph)
+        return _graph_check_result(
+            project_id=graph.get("project_id"),
+            ledger_head=graph.get("ledger_head"),
+            graph_fingerprint=graph.get("fingerprint"),
+            issues=issues,
+            node_count=len(graph.get("nodes", [])) if isinstance(graph.get("nodes"), list) else 0,
+            edge_count=len(graph.get("edges", [])) if isinstance(graph.get("edges"), list) else 0,
+        )
+
+    raw_issues = _raw_dependency_issues(events)
+    try:
+        derived = derive_graph(paths)
+    except VoyageError as exc:
+        if not _derived_graph_enabled_in_events(events):
+            raise
+        if not raw_issues:
+            raw_issues.append(_graph_issue("project-invalid", f"project:{events[0].get('subject', 'unknown') if events else 'unknown'}", str(exc)))
+        return _graph_check_result(
+            project_id=events[0].get("subject") if events else None,
+            ledger_head=events[-1].get("event_id") if events else None,
+            graph_fingerprint=None,
+            issues=raw_issues,
+            node_count=0,
+            edge_count=0,
+        )
+    issues = raw_issues + _structural_graph_issues(paths, derived)
+    return _graph_check_result(
+        project_id=derived["project_id"],
+        ledger_head=derived["ledger_head"],
+        graph_fingerprint=derived["fingerprint"],
+        issues=issues,
+        node_count=len(derived["nodes"]),
+        edge_count=len(derived["edges"]),
+    )
+
+
+def graph_path(paths: ProjectPaths, source: str, target: str) -> dict[str, Any]:
+    graph = derive_graph(paths)
+    known = {node.get("id") for node in graph["nodes"] if isinstance(node, dict)}
+    for endpoint in (source, target):
+        _require(endpoint in known, f"unknown graph endpoint: {endpoint}")
+    found = source == target
+    node_path = [source] if found else []
+    edge_path: list[dict[str, Any]] = []
+    if not found:
+        outgoing: dict[str, list[dict[str, Any]]] = {node_id: [] for node_id in known}
+        for edge in graph["edges"]:
+            if edge["source"] in outgoing and edge["target"] in known:
+                outgoing[edge["source"]].append(edge)
+        for edge_list in outgoing.values():
+            edge_list.sort(key=lambda item: (item["target"], item["id"]))
+        pending = [source]
+        visited = {source}
+        parent: dict[str, tuple[str, dict[str, Any]]] = {}
+        while pending and target not in visited:
+            node_id = pending.pop(0)
+            for edge in outgoing[node_id]:
+                next_id = edge["target"]
+                if next_id in visited:
+                    continue
+                visited.add(next_id)
+                parent[next_id] = (node_id, edge)
+                pending.append(next_id)
+                if next_id == target:
+                    break
+        found = target in visited
+        if found:
+            reversed_nodes = [target]
+            reversed_edges: list[dict[str, Any]] = []
+            cursor = target
+            while cursor != source:
+                previous, edge = parent[cursor]
+                reversed_nodes.append(previous)
+                reversed_edges.append(edge)
+                cursor = previous
+            node_path = list(reversed(reversed_nodes))
+            edge_path = list(reversed(reversed_edges))
+    return {
+        "schema_version": DERIVED_GRAPH_SCHEMA_VERSION,
+        "project_id": graph["project_id"],
+        "ledger_head": graph["ledger_head"],
+        "graph_fingerprint": graph["fingerprint"],
+        "from": source,
+        "to": target,
+        "found": found,
+        "length": len(edge_path),
+        "nodes": node_path,
+        "edges": edge_path,
     }
 
 

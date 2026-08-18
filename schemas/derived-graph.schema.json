@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voyage-skill.local/schemas/derived-graph.schema.json",
+  "title": "VoyageSkill derived graph exchange",
+  "type": "object",
+  "required": ["schema_version", "project_id", "ledger_head", "source_fingerprints", "nodes", "edges", "fingerprint"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "ledger_head": {"type": ["string", "null"]},
+    "source_fingerprints": {
+      "type": "object",
+      "required": ["manifest", "truth_registry", "graph", "resources", "gates", "ledger", "evidence"],
+      "properties": {
+        "manifest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "truth_registry": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "graph": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "resources": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "gates": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "ledger": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "evidence": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "schema_version", "status", "scope", "authority", "risk", "evidence", "provenance", "supersedes", "attributes"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "type": {"enum": ["project", "principal", "loop-binding", "truth-source", "decision", "work-item", "delivery", "immutable-anchor", "evidence", "gate", "resource", "lease", "environment", "channel", "rule", "block", "external-anchor"]},
+          "schema_version": {"const": 1},
+          "status": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "minLength": 1},
+          "authority": {"type": "string", "minLength": 1},
+          "risk": {"enum": ["light", "standard", "strict"]},
+          "evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "provenance": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "supersedes": {"type": ["string", "null"]},
+          "attributes": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "schema_version", "source", "target", "status", "authority", "evidence", "provenance", "attributes"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^edge:[a-f0-9]{64}$"},
+          "type": {"enum": ["governs", "depends-on", "authorized-by", "bound-to-loop", "assigned-to", "delivered-via", "acknowledged-by", "claims", "releases", "produces", "anchored-at", "validated-by", "rejects", "blocks", "unblocks", "supersedes", "retires", "readback-of", "escalates-to"]},
+          "schema_version": {"const": 1},
+          "source": {"type": "string", "minLength": 1},
+          "target": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "minLength": 1},
+          "authority": {"type": "string", "minLength": 1},
+          "evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "provenance": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "attributes": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": false
+}

@@ -86,6 +86,14 @@ catalog entries as unavailable, and never infer an extension file path or load
 extension detail for an unrelated core task.
 <!-- extension-loading:end -->
 
+<!-- graph-loading:start -->
+For a graph derivation, consistency, or path task, run `voyage extension status`
+first and require `derived-graph` to be explicitly enabled. Resolve the active system
+truth and operations runbook through the registry, load only their
+derived-graph sections, and use the read-only graph commands. Treat the result
+as a disposable view of registered inputs, never as new project truth.
+<!-- graph-loading:end -->
+
 - Resolve the truth registry from the managed project's manifest.
 - Resolve the one active, activation-verified source for each required domain:
   `product`, `governance`, `system`, and `operations`.

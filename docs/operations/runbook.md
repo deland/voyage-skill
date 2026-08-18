@@ -54,6 +54,9 @@ change.
 | `voyage extension list` |
 | `voyage extension status` |
 | `voyage gate record` |
+| `voyage graph check` |
+| `voyage graph derive` |
+| `voyage graph path` |
 | `voyage init` |
 | `voyage recover` |
 | `voyage resource claim` |
@@ -152,6 +155,29 @@ enabled. Projects created before the explicit marker report
 `legacy-compatible`: replay their old extension events without inventing enable
 history, then require the explicit lifecycle for future governed adoption.
 <!-- extension-operations:end -->
+
+## Derived graph operations
+
+<!-- derived-graph-operations:start -->
+First inspect `voyage extension status`. If `derived-graph` is not enabled,
+record an exact User decision for `extension.enable`, project ID, extension ID,
+and version 1.0.0, then run the normal `extension enable` command. A
+legacy-compatible project does not infer graph access from old history.
+
+Use `voyage graph derive` for the deterministic versioned node/edge view,
+`voyage graph check` for sorted integrity findings, and `voyage graph path
+<from> <to>` for a directed deterministic shortest path. A clean check and a
+found path exit 0. Consistency findings or known disconnected endpoints exit 1
+with JSON on stdout. Access, unknown endpoint, and usage errors exit 2 through
+the standard error channel.
+
+The commands are read-only: they append no event and create no cache, index, or
+generated graph file. `graph check` can report a hash-consistent damaged work
+dependency as `dangling-reference` or `dependency-cycle` even when normal
+replay cannot form an authoritative state. Never use that diagnostic partial
+view as project truth. Disable through the governed extension lifecycle when
+the query capability is no longer needed.
+<!-- derived-graph-operations:end -->
 
 ## Risk policy operations
 

@@ -114,6 +114,18 @@ class DogfoodContractTests(unittest.TestCase):
     def test_schema_files_are_exercised_by_tests(self) -> None:
         paths = project_paths(REPOSITORY)
         valid_instances = {
+            "derived-graph": {
+                "schema_version": 1,
+                "project_id": "schema-fixture",
+                "ledger_head": None,
+                "source_fingerprints": {
+                    key: "0" * 64
+                    for key in ("manifest", "truth_registry", "graph", "resources", "gates", "ledger", "evidence")
+                },
+                "nodes": [],
+                "edges": [],
+                "fingerprint": "0" * 64,
+            },
             "evidence": {
                 "kind": "runtime-readback",
                 "version": 1,
