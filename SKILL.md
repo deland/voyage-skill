@@ -15,6 +15,7 @@ Treat this file as a stable entry, never as project state.
 4. Read only the active, activation-verified sources needed for the current domain.
 5. Treat `docs/research/`, chat memory, summaries, drafts, and worker claims as non-authoritative.
 6. Stop and report a conflict when an active source cannot be resolved.
+7. If `.voyage/init-state.json` exists, follow the active runbook and resume the identical init command before other writes.
 
 ## Recover
 
@@ -93,6 +94,13 @@ truth and operations runbook through the registry, load only their
 derived-graph sections, and use the read-only graph commands. Treat the result
 as a disposable view of registered inputs, never as new project truth.
 <!-- graph-loading:end -->
+
+<!-- trust-loading:start -->
+Treat actor and loop identity as a local caller assertion, not cryptographic
+authentication; trust only the OS account and worktree boundary. For hostile or
+mutually untrusted writers, stop and resolve the active governance and system truth
+before using an external authenticated writer.
+<!-- trust-loading:end -->
 
 - Resolve the truth registry from the managed project's manifest.
 - Resolve the one active, activation-verified source for each required domain:

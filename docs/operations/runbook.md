@@ -99,6 +99,13 @@ change.
 system, and operations contracts remain draft and contain explicit TODO fields.
 Review and edit them before recording any activation decision.
 
+If init is interrupted, `.voyage/init-state.json` records the exact project ID,
+truth-registry mode/path, completed phase, and next action. Rerun the identical
+`voyage init` command; do not edit the marker or switch arguments. Resume is
+idempotent, never duplicates `project.initialized`, and removes the marker only
+after a valid bootstrap readback. An adopted registry remains user-owned and is
+never overwritten during retry.
+
 Inspect the exact sources and gaps:
 
 ```bash
@@ -179,6 +186,42 @@ view as project truth. Disable through the governed extension lifecycle when
 the query capability is no longer needed.
 <!-- derived-graph-operations:end -->
 
+## Full-ledger benchmark
+
+<!-- ledger-performance-operations:start -->
+Run the disposable diagnostic outside normal project operations:
+
+```bash
+python3 scripts/voyage-benchmark.py
+```
+
+It measures load, full hash validation, and full replay at 1,000, 10,000, and
+100,000 events without reading or writing a managed project. Version 1 retains
+full replay while the 100,000-event median remains below 2.0 seconds and the
+ledger remains below 256 MiB. Smaller custom samples are calibration only and
+return insufficient data for the snapshot decision.
+
+Crossing either threshold does not create a snapshot. Open a separate
+User-approved work item first. Any future derived snapshot must cite the exact
+ledger-head hash, be disposable, and leave full-chain validation as the
+authority. v0.x provides no snapshot, checkpoint, compaction, or incremental
+index command.
+<!-- ledger-performance-operations:end -->
+
+## Platform capability recovery
+
+<!-- platform-operations:start -->
+Inspect `runtime_capabilities` in `voyage recover` before permitting writes.
+VoyageSkill v0.x supports ledger append only with the Unix `fcntl` advisory
+lock backend. Read-only validate, recover, and graph inspection remain usable
+when the backend is absent, but every append must stop before mutation.
+
+A Windows locking adapter is not implemented. Keep the project read-only and
+move writes to a supported Unix worktree or an external serialized writer.
+Never disable locking, use Git as a realtime lock, or claim multi-host write
+coordination.
+<!-- platform-operations:end -->
+
 ## Risk policy operations
 
 <!-- risk-operations:start -->
@@ -254,6 +297,11 @@ memory.
 - Treat expiry as `recovery-required` for external or stateful resources.
 - Probe the actual port, account, environment, or session before reassignment.
 - Record abnormal recovery and cleanup as evidence-bearing events.
+
+The canonical event subject for claim, release, and recover is the resource ID,
+which must match `payload.resource_id`; the lease ID is
+`payload.lease_id`. CLI release/recover accepts a lease ID, resolves the real
+resource ID from replayed state, and writes that resource as the event subject.
 
 ## Gate protocol
 

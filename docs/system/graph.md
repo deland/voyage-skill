@@ -14,6 +14,14 @@ contract. If the two disagree, runtime behavior must fail safely and the
 contract drift must be resolved in one tested change; a Schema file alone does
 not silently alter runtime authority.
 
+## Local identity trust
+
+Actor IDs and loop labels are a caller assertion without cryptographic
+authentication. The OS account and worktree permissions form the trusted
+boundary. The hash chain is tamper-evident, not tamper-proof, and protection
+against a hostile same-account writer is out of scope. Use an external
+authenticated and serialized writer for mutually untrusted principals.
+
 ## Permanent kernel contract
 
 <!-- kernel-contract:start -->
@@ -89,6 +97,44 @@ There is no graph database, no cache or persisted index, no graph UI, and no
 writable graph API. Disabling the extension removes query access without
 altering the ledger or deleting extension history.
 <!-- derived-graph-contract:end -->
+
+## Full-ledger performance boundary
+
+<!-- ledger-performance-contract:start -->
+The append-only ledger and complete hash-chain replay remain authoritative.
+Version-1 performance diagnostics separately measure JSONL load, full hash
+validation, and full replay at 1,000, 10,000, and 100,000 events. The current
+100,000-event baseline is below the snapshot-review thresholds of 2.0 seconds
+or 256 MiB.
+
+There is no snapshot, checkpoint, or incremental index in v0.x. Reaching either
+threshold only opens a separate User-approved design and verification work
+item; it never changes normal validation. Any future optimization must bind to
+an exact ledger-head hash, remain disposable, and reproduce the same state
+after deletion through complete ledger validation and replay.
+<!-- ledger-performance-contract:end -->
+
+## Platform write boundary
+
+<!-- platform-contract:start -->
+VoyageSkill v0.x serializes local ledger writes with Unix `fcntl` advisory
+locks. Read-only loading, validation, recovery, and graph derivation remain
+portable when that backend is unavailable, but append is disabled before any
+ledger mutation. Recovery exposes the live backend and append capability.
+
+A Windows locking adapter is not implemented or claimed. Move writes to a
+supported Unix worktree or place an external serialized writer in front of the
+project; do not bypass the lock or infer multi-host coordination from Git.
+<!-- platform-contract:end -->
+
+## Initialization recovery boundary
+
+Initialization uses the temporary, non-authoritative
+`.voyage/init-state.json` marker to record exact project/registry arguments and
+the last durable phase. Rerunning identical `voyage init` arguments resumes
+idempotently and records exactly one `project.initialized` event. Different
+arguments fail without mutation. Successful initialization removes the marker;
+an adopted truth registry is validated but never rewritten or deleted.
 
 Every edge names its endpoints, preconditions, creating permission, required
 evidence, invalidation conditions, and failure transition.
@@ -186,6 +232,12 @@ file, account, port, environment, session, window, and quota.
 Definitions state policy; live availability requires both ledger lease state and
 a sufficiently fresh probe. Expired external leases require recovery probing and
 do not prove release.
+
+For `resource.claimed`, `resource.released`, and `resource.recovered`, the event
+subject is always the resource ID and must equal `payload.resource_id`; the
+lease ID remains in `payload.lease_id`. Replay, recovery, and the derived graph
+preserve both identities. A lease-oriented query resolves its resource ID from
+replayed state instead of treating the lease ID as an event subject.
 
 ## Evidence matching
 

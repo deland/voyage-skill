@@ -1795,3 +1795,155 @@ active → retired | superseded
 - Readback: a dogfood `graph derive` without explicit enable returned exit 2 with `derived-graph extension is not enabled`; `.voyage/ledger/events.jsonl` remained SHA-256 `0a6ba5707c289a63cc277efaec5283ba9916a3426d566231c2c33a2c784c40eb` before and after; the anchor contains 10 changed files with 1977 insertions and 6 deletions, including the version-1 exchange schema and 743-line derived-graph suite; the worktree was clean before this CLOSE append; `SKILL.md` remains progressively disclosed at 104 lines
 - Remaining issues: the official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned metadata tests and the dependency-free equivalent validator pass, along with all runtime, schema, invocation, dogfood, recovery, extension, graph, append-only, and diff checks
 - Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head contains both the implementation anchor and CLOSE commit, then select the next planned work item without expanding the permanent kernel
+
+---
+
+## 2026-08-19 · DEV-0009 · MK-302 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `836e158b779b70b536ddb1458b0f7cb60f0dcc56`
+- Anchor: pending
+- Supersedes: none
+- Scope: add a reproducible versioned full-ledger benchmark and quantitative snapshot-review policy; make the Unix advisory-lock boundary import-safe and visible during recovery; converge the local actor trust statement and resource identity contract; make interrupted initialization resumable through a scoped bootstrap marker
+- Non-goals: no snapshot, checkpoint, incremental index, ledger compaction, event deletion, background benchmark, database, remote lock service, speculative Windows locking adapter, cryptographic identity/signature system, multi-host writer coordination, README addition, or weakening of full hash-chain validation
+- Risk: standard; performance diagnostics are read-only, but lock fallback, initialization recovery, or misleading trust claims could permit unsafe writes, duplicate initialization, overwrite user-owned inputs, or imply protections the runtime does not provide
+- Dependencies: MK-103 converged event/resource contracts and MK-301 full-ledger graph projection complete; local and remote branch both resolve to the baseline; current repository has 290 passing tests and a clean worktree before this append
+- Acceptance gates: all ST-3021 through ST-3026 tests below are added before product implementation and observed failing only for documented gaps; every subtask passes focused tests before the next; final complete regression, compilation, dogfood validate/truth/recover, benchmark smoke run, CLI reference if changed, Skill metadata, append-only planning, initialization retry readback, unsupported-lock atomicity, legacy compatibility, and diff hygiene pass
+- Actual result: pending
+- Tests: ST-3021 through ST-3026 defined below; 31 test methods planned
+- Readback: a one-run synthetic baseline on this machine measured full `load_events + validate_hash_chain + replay_events` at 1,000 events/470,748 bytes in 0.0074 seconds, 10,000/4,727,748 in 0.0749 seconds, 50,000/23,727,748 in 0.4353 seconds, and 100,000/47,477,748 in 0.9164 seconds, all with zero chain errors; current import hard-depends on `fcntl`; current init publishes manifest before later artifacts and has no retry marker; actor trust is already documented in governance but is not exposed in recovery or Skill; resource event identity is implemented but lacks one final cross-layer guard
+- Remaining issues: benchmark exchange/policy, unsupported-platform import/write behavior, recovery capability readout, trust convergence, resource identity guard, resumable init marker, active documentation, and Skill loading remain unimplemented
+- Next safe action: add all 31 tests without product edits, capture the red baseline, then implement ST-3021 only
+
+### DEV-0009 固定性能、平台与信任决策
+
+1. Version-1 benchmark measures three independent phases over a synthetic append-only ledger: JSONL load, complete hash-chain validation, and complete replay. Default event counts are 1,000, 10,000, and 100,000; reports include event/byte counts, per-run samples, medians, errors, Python/platform identity, policy thresholds, and a decision, but no project state or authoritative claim.
+2. Snapshot review thresholds are 2.0 seconds median full-chain processing at 100,000 events or 256 MiB ledger size. Crossing either threshold returns `investigate-snapshot`; it never creates a snapshot. Missing the 100,000-event sample returns `insufficient-data`; staying below both returns `retain-full-replay`.
+3. The measured 100,000-event baseline is 0.9164 seconds and 47,477,748 bytes, below both thresholds. MK-302 therefore adds no snapshot/checkpoint/index API, file, event, or truth source. Any future snapshot requires a separate User-approved work item, must bind to an exact ledger-head hash, remain disposable, and preserve full-chain validation as the authority.
+4. Benchmarking is an explicit diagnostic script, never part of normal init, validate, recover, append, or graph commands. Small custom counts/runs support tests and local calibration; benchmark execution writes only to a temporary directory and cannot mutate a managed project.
+5. v0.x write serialization officially supports Unix `fcntl` advisory locks. The module must still import and all read-only validation/recovery must work when `fcntl` is unavailable; every ledger write must then fail deterministically before mutation with the supported-platform boundary and next action. No untested Windows adapter is claimed.
+6. Recovery exposes a versioned runtime-capability object naming platform, lock backend/support, append permission, and actor authentication mode. It is a local capability readout, not evidence that another writer or hostile process is absent.
+7. Actor IDs and loop labels remain caller assertions. Hashes detect later ledger modification but do not authenticate the caller, prevent a malicious same-account process from appending through the API, or make local history tamper-proof. The trusted boundary is the OS account and worktree permissions; hostile multi-writer use requires an external authenticated gateway or future separately approved signature design.
+8. Resource lifecycle identity is canonical: `resource.claimed`, `resource.released`, and `resource.recovered` subjects are the resource ID; payload repeats the same resource ID and carries the lease ID; lease-oriented CLI/API queries must resolve the resource from replayed state rather than reinterpret subject.
+9. Interrupted init uses `.voyage/init-state.json` version 1 as a temporary, non-authoritative recovery marker containing exact project ID, registry path/mode, completed phase, and next safe action. Rerunning identical init arguments resumes idempotently; different arguments refuse without mutation; successful completion removes the marker and records exactly one `project.initialized` event.
+10. Init may recreate only marker-owned generated bootstrap artifacts. It must never overwrite or delete an adopted truth registry or unrelated user file. Atomic JSON writes remain mandatory; an interrupted project cannot be treated as operational or authorize work.
+11. No new README is created because VoyageSkill is a Skill package and `skill-creator` forbids auxiliary documentation. The active product, governance, system, operations truths and concise `SKILL.md` must carry the platform/trust/recovery boundaries consistently.
+
+### ST-3021 · 可重复账本基准与量化策略
+
+实现前测试用例：
+
+1. `benchmark_policy_is_versioned_and_quantitative`：版本、默认规模、100,000 事件、2.0 秒和 256 MiB 阈值均为固定可序列化合同。
+2. `small_benchmark_measures_load_hash_and_replay_without_errors`：小规模多次运行输出每阶段样本、中位数、字节数、零链错误和真实末事件读回。
+3. `below_threshold_retains_full_replay`：完整目标样本低于时间和大小阈值时决定精确为 `retain-full-replay`。
+4. `time_or_size_threshold_requires_investigation_only`：任一阈值达到时只返回 `investigate-snapshot` 与原因，不创建或声称已有快照。
+5. `missing_target_sample_is_insufficient_data`：未运行 100,000 事件时不以小样本外推通过，明确返回 `insufficient-data`。
+6. `benchmark_script_emits_json_and_mutates_no_project_file`：脚本支持自定义小规模和 runs，输出结构化 JSON，运行前后项目树摘要和账本完全一致。
+
+### ST-3022 · 长账本全链权威与无快照边界
+
+实现前测试用例：
+
+1. `ten_thousand_event_ledger_loads_validates_and_replays_exact_head`：10,000 事件 JSONL 全量加载、哈希验证和重放产生精确 head 与观测计数。
+2. `append_after_long_ledger_preserves_chain_and_single_new_head`：长账本追加仍验证全部历史，只增加一条事件且 prev-hash 精确引用旧 head。
+3. `runtime_contains_no_snapshot_checkpoint_or_incremental_index_surface`：core、CLI、schema 和初始化产物不存在快照、checkpoint 或增量索引合同。
+4. `benchmark_and_docs_require_separate_user_work_before_snapshot`：超过阈值只建议独立 User-approved 工作，删除任何未来派生快照仍以全账本恢复为前提。
+
+### ST-3023 · 平台锁边界与恢复能力读回
+
+实现前测试用例：
+
+1. `runtime_capabilities_report_fcntl_backend_on_supported_host`：当前 Unix 主机报告 `fcntl`、supported/append-safe 为真和版本化字段。
+2. `core_import_and_read_only_validation_do_not_require_fcntl`：模拟 `fcntl` 不可用时，加载、校验、重放和 recovery 仍可执行。
+3. `unsupported_write_lock_fails_before_ledger_mutation`：无锁后端时 append 返回确定性 VoyageError，账本 bytes/head 不变且不创建误导性事件。
+4. `recovery_names_unsupported_platform_next_action`：恢复输出明确只读能力、不可追加和迁移到受支持 Unix/外部序列化写入器的下一动作。
+5. `active_docs_state_unix_only_write_support_without_windows_claim`：正式合同与 runbook 明确 `fcntl` Unix 边界、只读可移植性和未提供 Windows adapter。
+
+### ST-3024 · Actor 信任模型收敛
+
+实现前测试用例：
+
+1. `runtime_capabilities_deny_cryptographic_actor_authentication`：运行时合同明确 local asserted identity、cryptographic=false、tamper-evident=true、tamper-proof=false。
+2. `authority_product_system_and_skill_share_exact_trust_boundary`：active truth 与 Skill 均说明 OS account/worktree 是边界，actor/loop 为声明，哈希不认证调用者。
+3. `docs_do_not_claim_signatures_hostile_writer_protection_or_multi_host_locking`：正式文档不虚构签名、恶意本机写者防护或分布式锁。
+4. `skill_keeps_trust_detail_progressively_disclosed`：Skill 只保留一句停止条件并引导解析 active governance/system 真源，不复制长篇平台实现。
+
+### ST-3025 · 资源事件身份与查询合同终检
+
+实现前测试用例：
+
+1. `all_resource_lifecycle_events_use_resource_subject_and_lease_payload`：claim/release/recover 的 subject、payload.resource_id 和 payload.lease_id 始终符合 canonical contract。
+2. `resource_identity_mismatch_is_rejected_before_replay_state_changes`：三类事件任一 subject/payload 不一致均确定性失败且不推进 head。
+3. `lease_oriented_cli_resolves_resource_from_replayed_state`：release/recover 只给 lease ID 时写出的事件仍以真实 resource ID 为 subject，不接受调用者猜测。
+4. `schema_graph_recovery_and_docs_use_the_same_resource_identity`：Schema、派生图、恢复输出和 runbook 对 resource/lease 身份无漂移。
+
+### ST-3026 · 中断初始化标记与幂等恢复
+
+实现前测试用例：
+
+1. `successful_init_removes_recovery_marker_and_records_one_event`：正常 init 无残留 marker，账本恰有一个匹配的 initialization event。
+2. `interrupted_init_leaves_versioned_scoped_marker`：在 control/truth/ledger 阶段注入 I/O 中断时保留 marker，记录已完成 phase、精确参数和重试动作。
+3. `same_arguments_resume_interrupted_init_idempotently`：相同参数重跑完成合法 bootstrap，不重复 initialization event，不产生额外真源。
+4. `resume_after_initial_event_does_not_duplicate_ledger_head`：事件已落盘但 marker 未清除的中断可恢复，最终仍只有一个 initialization event。
+5. `mismatched_resume_arguments_refuse_without_mutation`：project ID、registry path 或 adopt/generated mode 改变时拒绝，marker、账本和用户文件 bytes 不变。
+6. `adopted_truth_registry_is_never_overwritten_during_retry`：采用已有 registry 的失败与重试全过程保持其摘要不变。
+7. `interrupted_project_cannot_validate_as_operational_or_authorize_work`：未完成 init 不会被误认 operational；CLI/core 给出恢复指令而非 traceback 或半初始化成功。
+
+---
+
+## 2026-08-19 · DEV-0009 · MK-302 · UPDATE
+
+- Status: in-progress; red baseline captured
+- Baseline: `836e158b779b70b536ddb1458b0f7cb60f0dcc56`
+- Anchor: pending
+- Supersedes: DEV-0009 START test-count field only; the six detailed ST-3021 through ST-3026 lists remain unchanged
+- Scope: all tests were added before product implementation; the START summary's “31 test methods” is corrected to 30 because the fixed detailed groups total 6+4+5+4+4+7
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0009 START fixed decisions and detailed test matrix
+- Acceptance gates: the suite must expose absent benchmark module/script/policy, no runtime capability exchange, unconditional `fcntl` import, permissive unsupported writes, missing platform/trust/benchmark active documentation, absent init recovery marker/resume behavior, and any remaining cross-layer resource identity drift before implementation
+- Actual result: expected FAIL; 30 tests ran with 4 passes, 15 assertion failures, and 11 errors; the four existing passes prove 10,000-event full replay, long-ledger append/hash continuity, canonical resource lifecycle events, and lease-oriented CLI subject resolution already work
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-skill-pycache python3 -B -m unittest tests.test_platform_performance -v`
+- Readback: benchmark imports and script are absent; `runtime_capabilities` and recovery capability output are absent; patching the planned `_fcntl` boundary does not stop current writes because core imports `fcntl` directly; initialization ignores the phase hook and leaves no marker; Skill/platform/trust/threshold markers are absent; adopted registry and successful init legacy behavior remain intact; ST-3025 additionally found a real derived-graph null bug where an active executor with `delivery=None` reaches `work.get("delivery", {}).get(...)`
+- Remaining issues: all ST-3021 through ST-3026 implementation remains; fix the discovered graph null handling within ST-3025 and add a precise assertion that active undelivered work remains derivable
+- Next safe action: implement only ST-3021 benchmark policy/module/script, run BenchmarkPolicyTests, then proceed in order
+
+---
+
+## 2026-08-19 · DEV-0009 · MK-302 · UPDATE
+
+- Status: in-progress; supplementary initialization safety review captured red and fixed
+- Baseline: `836e158b779b70b536ddb1458b0f7cb60f0dcc56`
+- Anchor: pending
+- Supersedes: none
+- Scope: add two negative cases found during pre-commit review: invalid adopted-registry input must not create a recovery marker, and fresh init must not overwrite pre-existing default control/truth targets that no marker owns
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: primary 30-test suite green and ST-3026 marker/resume implementation
+- Acceptance gates: both cases fail before their fix, then pass with all InitRecoveryTests; no existing bootstrap/adoption behavior is weakened
+- Actual result: expected FAIL first; two test methods produced four assertion failures including three pre-existing target subtests; after preflight was moved ahead of marker publication and marker ownership was enforced, all 9 InitRecoveryTests passed
+- Tests: `test_invalid_adopted_registry_does_not_create_recovery_marker` and `test_fresh_init_refuses_preexisting_targets_without_overwrite`; total MK-302 suite is now 32 tests
+- Readback: the failed version left `.voyage/init-state.json` for a missing adopted path and silently overwrote `.voyage/graph.json`, `docs/voyage/product.md`, or the default registry; the fixed version validates adopted input and checks all generated targets before marker creation, preserving bytes and leaving no marker on invalid fresh input
+- Remaining issues: rerun all 32 MK-302 tests and the complete repository suite, then perform final dogfood/benchmark/Skill/diff acceptance
+- Next safe action: run the expanded focused suite and complete regression before appending the implementation-complete record
+
+---
+
+## 2026-08-19 · DEV-0009 · MK-302 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `836e158b779b70b536ddb1458b0f7cb60f0dcc56`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-3021 through ST-3026 delivered; version-1 disposable full-ledger benchmarking and quantitative no-snapshot policy, import-safe Unix lock capability, recovery-visible platform/trust boundary, canonical resource identity closure, active documentation, and resumable marker-based initialization are implemented
+- Non-goals: unchanged; no snapshot, checkpoint, incremental index, compaction, event deletion, database, remote lock service, Windows locking adapter, cryptographic identity/signature system, multi-host writer coordination, README, or weaker hash validation was introduced
+- Risk: standard; accepted before commit only after full-chain authority, invalid benchmark handling, unsupported-lock atomicity, actor trust denial, resource identity, graph projection, interrupted init phases, exact resume arguments, adopted-registry preservation, pre-existing target preservation, and single initialization-event behavior were exercised
+- Dependencies: MK-103, MK-301, DEV-0009 fixed decisions, primary red baseline, test-count correction, graph-null discovery, and all supplementary safety review red cases satisfied
+- Acceptance gates: focused performance/platform/trust/init suite, complete regression, compilation, dogfood validate/truth/recover capabilities, 100,000-event benchmark readback, CLI reference, Skill metadata/equivalent validation, append-only planning, no marker/snapshot residue, legacy compatibility, and diff hygiene
+- Actual result: PASS before commit; all 34 MK-302 tests passed and the complete 324-test repository suite passed with 0 failures, 0 errors, and 0 skips; compileall passed; dogfood validate returned no errors; truth remained operational with six activation-verified sources, no missing domains, and no unverified source; recovery reported zero work, unknown, or conflicts and exposed Darwin/`fcntl` append-safe plus local-caller-asserted non-cryptographic actor identity; CLI reference and `git diff --check` passed
+- Tests: the initial 30-test suite was written before product implementation and produced 4 passes, 15 failures, and 11 errors; ST-3021 passed 6/6, ST-3022 4/4, ST-3023 5/5, ST-3024 4/4, ST-3025 4/4, and the original ST-3026 7/7; four supplementary methods separately captured red before fixes for invalid adopted input marker leakage, generated pre-existing target overwrite, adopted-mode control overwrite, and incomplete/invalid 100,000-event sample acceptance, bringing the final total to 34
+- Benchmark readback: the version-1 implementation measured one full run at 1,000 events/489,751 bytes/0.0076 seconds, 10,000/4,917,751/0.0772 seconds, and 100,000/49,377,751/0.8732 seconds with zero chain errors and exact heads; the decision was `retain-full-replay`, `creates_snapshot=false`, below 2.0 seconds and 256 MiB
+- Platform/trust readback: core imports without `fcntl`; read-only validate/recover remains available when the backend is absent, while append fails before mutation; live recovery reports schema version 1, platform, backend, supported/append-safe, and next action; actor identity is explicitly local-caller-asserted, cryptographic=false, tamper-evident=true, tamper-proof=false across runtime, product, governance, system, operations, and the 112-line progressively disclosed Skill
+- Initialization/resource readback: interruption after control, truth, ledger, or initial event leaves the exact version-1 marker and resumes idempotently with one initialization event; mismatched args, invalid adopted input, and pre-existing generated/adopted targets fail without mutation; adopted registry bytes remain unchanged; resource claim/release/recover retain resource subject plus lease payload across Schema, CLI, replay, recovery, and graph; active undelivered work no longer triggers a derived-graph `None.get` failure
+- Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository metadata tests and the dependency-free equivalent validator pass; immutable implementation anchor is pending; snapshot review remains intentionally deferred unless a future measured 100,000-event sample reaches a fixed threshold and a separate User-approved work item is opened
+- Next safe action: commit the MK-302 implementation, rerun all 34 focused tests, all 324 repository tests, the 100,000-event benchmark, and acceptance gates against the exact immutable commit, append DEV-0009 CLOSE with its SHA, then commit and push the close record

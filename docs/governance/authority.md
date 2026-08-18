@@ -27,6 +27,11 @@ with direct write access is inside the local trust boundary; VoyageSkill detects
 unsupported transitions and historical mutation but does not provide principal
 authentication against that actor.
 
+Actor and loop values are a caller assertion. The trusted boundary is the OS
+account and worktree permissions. Protection against a hostile same-account
+writer is out of scope; use an external cryptographic identity and serialized
+write boundary before allowing mutually untrusted callers.
+
 ## Required separation
 
 - Delivery executor and final quality signer must differ.

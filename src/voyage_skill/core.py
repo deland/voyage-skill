@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
 import re
 import socket
 import subprocess
+import sys
 import tempfile
 import uuid
 from contextlib import contextmanager
@@ -15,6 +15,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
+
+try:
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - exercised by capability substitution tests
+    _fcntl = None
 
 
 SCHEMA_VERSION = "0.1.0"
@@ -204,6 +209,30 @@ def risk_policy_view() -> dict[str, Any]:
         "order": list(RISK_MODE_ORDER),
         "strict_domains": list(STRICT_RISK_DOMAINS),
         "modes": {mode: deepcopy(RISK_POLICIES[mode]) for mode in RISK_MODE_ORDER},
+    }
+
+
+def runtime_capabilities() -> dict[str, Any]:
+    lock_supported = _fcntl is not None
+    return {
+        "schema_version": 1,
+        "platform": sys.platform,
+        "write_lock": {
+            "backend": "fcntl" if lock_supported else None,
+            "supported": lock_supported,
+            "append_safe": lock_supported,
+            "next_safe_action": (
+                "none"
+                if lock_supported
+                else "keep this project read-only; move writes to supported Unix fcntl or an external serialized writer"
+            ),
+        },
+        "actor_identity": {
+            "mode": "local-caller-asserted",
+            "cryptographic_authentication": False,
+            "tamper_evident": True,
+            "tamper_proof": False,
+        },
     }
 
 
@@ -586,23 +615,31 @@ def _write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def initialize_project(root: str | Path, project_id: str, truth_registry_path: str | None = None) -> ProjectPaths:
+def _init_phase_hook(phase: str) -> None:
+    """Test seam for simulating an interruption after a durable init phase."""
+
+
+def _initialize_project_attempt(root: str | Path, project_id: str, truth_registry_path: str | None = None) -> ProjectPaths:
     base = Path(root).expanduser().resolve()
     control = base / ".voyage"
-    if (control / "manifest.json").exists():
-        raise VoyageError(f"project is already initialized: {base}")
     if not project_id or any(char.isspace() for char in project_id):
         raise VoyageError("project ID must be non-empty and contain no whitespace")
 
     registry_relative = truth_registry_path or "docs/voyage/truth-registry.json"
+    registry_mode = "adopted" if truth_registry_path else "generated"
     registry_target = (base / registry_relative).resolve()
     try:
         registry_target.relative_to(base)
     except ValueError as exc:
         raise VoyageError("truth registry must stay inside the project root") from exc
-    if truth_registry_path and not registry_target.is_file():
-        raise VoyageError(f"existing truth registry not found: {registry_relative}")
-    if truth_registry_path:
+
+    marker_path = control / "init-state.json"
+    manifest_path = control / "manifest.json"
+    resuming = marker_path.is_file()
+
+    def validate_adopted_registry() -> None:
+        if not registry_target.is_file():
+            raise VoyageError(f"existing truth registry not found: {registry_relative}")
         adopted_registry = load_json(registry_target)
         if adopted_registry.get("schema_version") != SCHEMA_VERSION:
             raise VoyageError(f"unsupported adopted truth registry schema: {adopted_registry.get('schema_version')}")
@@ -612,6 +649,66 @@ def initialize_project(root: str | Path, project_id: str, truth_registry_path: s
             )
         if not isinstance(adopted_registry.get("sources"), list):
             raise VoyageError("adopted truth registry sources must be an array")
+
+    if resuming:
+        marker = load_json(marker_path)
+        expected = {
+            "schema_version": 1,
+            "status": "in-progress",
+            "project_id": project_id,
+            "truth_registry": registry_relative,
+            "registry_mode": registry_mode,
+        }
+        mismatched = [key for key, value in expected.items() if marker.get(key) != value]
+        if mismatched:
+            raise VoyageError(
+                "initialization resume arguments do not match the recovery marker; "
+                "rerun the same voyage init command"
+            )
+    else:
+        if manifest_path.exists():
+            raise VoyageError(f"project is already initialized: {base}")
+        control_targets = (
+            control / "graph.json",
+            control / "resources.json",
+            control / "gates.json",
+            control / "ledger",
+            control / "evidence",
+        )
+        existing = next((target for target in control_targets if target.exists()), None)
+        if existing is not None:
+            raise VoyageError(f"initialization target already exists and is not marker-owned: {existing}")
+        if truth_registry_path:
+            validate_adopted_registry()
+        else:
+            owned_targets = (
+                registry_target,
+                base / "docs/voyage/product.md",
+                base / "docs/voyage/governance.md",
+                base / "docs/voyage/system.md",
+                base / "docs/voyage/operations.md",
+            )
+            existing = next((target for target in owned_targets if target.exists()), None)
+            if existing is not None:
+                raise VoyageError(f"initialization target already exists and is not marker-owned: {existing}")
+        marker = {
+            "schema_version": 1,
+            "status": "in-progress",
+            "project_id": project_id,
+            "truth_registry": registry_relative,
+            "registry_mode": registry_mode,
+            "phase": "started",
+            "next_safe_action": f"rerun voyage init with the same project ID and truth registry: {project_id}",
+        }
+        atomic_write_json(marker_path, marker)
+
+    def checkpoint(phase: str) -> None:
+        marker["phase"] = phase
+        atomic_write_json(marker_path, marker)
+        _init_phase_hook(phase)
+
+    if truth_registry_path and resuming:
+        validate_adopted_registry()
 
     manifest = {
         "schema_version": SCHEMA_VERSION,
@@ -648,6 +745,7 @@ def initialize_project(root: str | Path, project_id: str, truth_registry_path: s
     atomic_write_json(control / "graph.json", graph)
     atomic_write_json(control / "resources.json", resources)
     atomic_write_json(control / "gates.json", gates)
+    checkpoint("control-written")
     if not truth_registry_path:
         truth_registry = {
             "schema_version": SCHEMA_VERSION,
@@ -692,21 +790,49 @@ def initialize_project(root: str | Path, project_id: str, truth_registry_path: s
                 base / "docs" / "voyage" / filename,
                 body,
             )
+    checkpoint("truth-written")
     (control / "ledger").mkdir(parents=True, exist_ok=True)
-    (control / "ledger" / "events.jsonl").touch(exist_ok=False)
+    ledger_path = control / "ledger" / "events.jsonl"
+    if ledger_path.exists() and not resuming:
+        raise VoyageError(f"initialization ledger already exists without a recovery marker: {ledger_path}")
+    ledger_path.touch(exist_ok=True)
     (control / "evidence").mkdir(parents=True, exist_ok=True)
     _write_text(control / "evidence" / ".gitkeep", "")
+    checkpoint("ledger-written")
     paths = project_paths(base)
-    append_event(
-        paths,
-        actor="voyage-system",
-        loop="system",
-        event_type="project.initialized",
-        subject=project_id,
-        risk="standard",
-        payload={"schema_version": SCHEMA_VERSION, "project_stage": "bootstrap", "extension_mode": "explicit"},
-    )
+    events = load_events(paths.ledger)
+    if not events:
+        append_event(
+            paths,
+            actor="voyage-system",
+            loop="system",
+            event_type="project.initialized",
+            subject=project_id,
+            risk="standard",
+            payload={"schema_version": SCHEMA_VERSION, "project_stage": "bootstrap", "extension_mode": "explicit"},
+        )
+    else:
+        chain_errors = validate_hash_chain(events)
+        if chain_errors:
+            raise VoyageError("cannot resume initialization with an invalid ledger: " + "; ".join(chain_errors))
+        initialized = [event for event in events if event.get("type") == "project.initialized"]
+        if len(initialized) != 1 or initialized[0].get("subject") != project_id:
+            raise VoyageError("initialization recovery requires exactly one matching project.initialized event")
+    checkpoint("event-written")
+    validation_errors = validate_project(paths)
+    if validation_errors:
+        raise VoyageError("initialization produced an invalid bootstrap project: " + "; ".join(validation_errors))
+    marker_path.unlink()
     return paths
+
+
+def initialize_project(root: str | Path, project_id: str, truth_registry_path: str | None = None) -> ProjectPaths:
+    try:
+        return _initialize_project_attempt(root, project_id, truth_registry_path)
+    except OSError as exc:
+        raise VoyageError(
+            "initialization interrupted; rerun voyage init with the same project ID and truth registry"
+        ) from exc
 
 
 def load_events(ledger: Path) -> list[dict[str, Any]]:
@@ -729,14 +855,19 @@ def load_events(ledger: Path) -> list[dict[str, Any]]:
 
 @contextmanager
 def ledger_lock(ledger: Path) -> Iterator[None]:
+    if _fcntl is None:
+        raise VoyageError(
+            "ledger writes are read-only on this unsupported platform; "
+            "VoyageSkill v0.x requires Unix fcntl or an external serialized writer"
+        )
     lock_path = ledger.with_suffix(ledger.suffix + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        _fcntl.flock(handle.fileno(), _fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            _fcntl.flock(handle.fileno(), _fcntl.LOCK_UN)
 
 
 def make_event(
@@ -2715,13 +2846,15 @@ def _derive_graph_body(paths: ProjectPaths, state: dict[str, Any]) -> dict[str, 
         )
         add_edge(_derived_edge("governs", project_node_id, work_node_id, provenance=[(created or {}).get("event_id", "")]))
         if work.get("executor"):
+            delivery = work.get("delivery") or {}
+            assignment_provenance = delivery.get("event_id", "work-state")
             add_edge(
                 _derived_edge(
                     "assigned-to",
                     work_node_id,
-                    add_principal(work["executor"], provenance=work.get("delivery", {}).get("event_id", "work-state"), loop="execution"),
+                    add_principal(work["executor"], provenance=assignment_provenance, loop="execution"),
                     authority="execution",
-                    provenance=[work.get("delivery", {}).get("event_id", "work-state")],
+                    provenance=[assignment_provenance],
                 )
             )
         dependencies = (created or {}).get("payload", {}).get("dependencies", [])
@@ -4047,6 +4180,7 @@ def recovery_snapshot(
         "volatile_recheck_required": [lease["resource_id"] for lease in leases if lease["stateful"] or lease["expired"]],
         "extensions": extension_status(paths),
         "risk_policy": risk_policy_view(),
+        "runtime_capabilities": runtime_capabilities(),
         **facts,
     }
 

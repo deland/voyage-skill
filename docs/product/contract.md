@@ -52,3 +52,8 @@ leases, gate evidence, recovery output, and tests for the minimum journeys.
 
 The supported coordination boundary is one repository on one machine. Git may
 transport immutable history but is not a realtime lock service.
+
+Actor identity is a local caller assertion, not cryptographic authentication.
+The trusted boundary is the OS account and worktree permissions. Ledger hashes
+make later edits tamper-evident but not tamper-proof; protection against a
+hostile same-account writer is out of scope for v0.x.
