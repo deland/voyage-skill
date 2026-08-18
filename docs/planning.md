@@ -2208,3 +2208,53 @@ active → retired | superseded
 - Readback: project stage is operational; all six truth sources are activation-verified; decision-log reads version 3; recovery reports zero unknown, conflicts, blocks, or leases; `SKILL.md` is 114 lines and official validation passes; no build artifact or temporary environment exists in the source tree
 - Remaining issues: the clean source-install baseline still fails without wheel build tooling by design; RW-101 must define and implement the artifact build/install contract before README installation claims are accepted as proven
 - Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-000 anchor, then start RW-101 with its complete test matrix before changing packaging or CLI behavior
+
+---
+
+## 2026-08-19 · DEV-0011 · RW-101 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `4e6aa733ee5149d63e4208ddfcf18a69deed3485`
+- Anchor: pending
+- Supersedes: none
+- Scope: build reproducible wheel and source-checkout artifacts outside the repository, inspect their contents and digests, add deterministic version readback, install the wheel without network into a clean venv, and prove installed/source entry-point parity from unrelated working directories
+- Non-goals: no package upload, remote tag/release, signature, external project full lifecycle, historical migration fixture, optional extension, runtime state change, README expansion, or third-party runtime dependency
+- Risk: standard; malformed artifacts or misleading version/dependency metadata could create an unverifiable delivery surface, but all writes remain disposable and local
+- Dependencies: RW-000 distribution authority and black-box harness, clean local/remote baseline above
+- Acceptance gates: all tests below are added before implementation and expose absent builder/version/artifact behavior; each subtask passes before the next; final 351-test-or-later regression, compileall, dogfood, CLI reference, official Skill validation, artifact install/readback, clean source tree, and diff hygiene pass
+- Actual result: pending
+- Tests: 14 methods defined below; not run yet
+- Readback: current source installation in a clean venv fails without `bdist_wheel`; no repository-owned artifact builder or inspector exists; CLI has no deterministic `--version`; runtime dependencies remain empty
+- Remaining issues: all ST-1011 through ST-1013 work remains
+- Next safe action: add the 14 tests without product changes, capture the red baseline, then implement ST-1011 only
+
+### ST-1011 · 确定性制品构建与检查
+
+1. `cli_version_matches_module_and_package_metadata`：checkout script 和 `python -m voyage_skill` 的 `--version` 与单一模块/包版本一致。
+2. `builder_emits_wheel_and_source_archive_outside_source_tree`：精确 commit 构建两个规范命名制品，输出目录必须在源树外。
+3. `repeated_builds_are_byte_identical`：同 commit、版本和时间输入重复构建得到相同 SHA-256。
+4. `wheel_contains_only_runtime_license_metadata_and_entrypoint`：wheel 只含 runtime package、license、METADATA/WHEEL/RECORD/entry_points，不含 tests、docs、research、ledger 或 release report。
+5. `source_archive_is_commit_bound_and_excludes_worktree_changes`：source bundle 只含目标 commit tracked 文件，忽略未提交修改并记录 commit。
+
+### ST-1012 · 隔离安装与入口一致性
+
+1. `wheel_installs_offline_without_dependencies_in_clean_venv`：使用 `--no-index --no-deps` 安装 wheel，元数据 Requires-Dist 为空。
+2. `installed_console_runs_from_unrelated_cwd_without_pythonpath`：净化环境和无关 cwd 中 `voyage --help` 成功。
+3. `installed_console_and_module_report_identical_version`：installed `voyage --version` 与 venv `python -m voyage_skill --version` 完全一致。
+4. `installed_cli_initializes_validates_and_recovers_external_bootstrap`：安装后的 CLI 对全新外部项目完成 init/validate/recover，不依赖源码目录。
+5. `build_and_install_leave_source_tree_unchanged`：构建、venv、pip 缓存和运行产物均不写入 source tree。
+
+### ST-1013 · 失败边界与正式操作合同
+
+1. `builder_rejects_output_inside_source_tree_before_mutation`：源树内输出路径零修改拒绝。
+2. `builder_rejects_unknown_revision_and_non_repository`：未知 commit 或非 Git 目录确定性失败且无半制品。
+3. `artifact_inspector_rejects_tampered_or_incomplete_wheel`：摘要变化、RECORD 缺失或 entry point 错误均失败。
+4. `active_runbook_documents_local_build_install_verify_and_publish_stop`：正式 operations truth 记录可重复命令、离线安装读回和 User publication 停止点，Skill 不复制长流程。
+
+### DEV-0011 执行顺序
+
+1. 添加全部 14 项测试，运行并记录预期失败。
+2. 实现标准库 builder/inspector、脚本和 `--version`，先通过 ST-1011 与 ST-1013 构建边界。
+3. 使用真实 wheel、clean venv、无网络安装通过 ST-1012。
+4. 更新 active runbook 与生成的 CLI reference；保持 Skill 入口精简。
+5. 完整回归后创建不可变实现提交，复验、追加 CLOSE、推送并读回远端。
