@@ -19,13 +19,15 @@ Treat this file as a stable entry, never as project state.
 
 ## Recover
 
-Run these commands before resuming an existing project:
+Run these commands before resuming an existing project. Prefer installed `voyage`;
+otherwise invoke the checkout script at
+`python3 <voyage-skill>/scripts/voyage.py` with the same arguments:
 
 ```bash
-python3 <voyage-skill>/scripts/voyage.py --root <project> validate
-python3 <voyage-skill>/scripts/voyage.py --root <project> truth status
-python3 <voyage-skill>/scripts/voyage.py --root <project> evidence verify <evidence-id> --actor <principal>
-python3 <voyage-skill>/scripts/voyage.py --root <project> recover
+voyage --root <project> validate
+voyage --root <project> truth status
+voyage --root <project> evidence verify <evidence-id> --actor <principal>
+voyage --root <project> recover
 ```
 
 Use the recovery output to distinguish observed, declared, unknown, and

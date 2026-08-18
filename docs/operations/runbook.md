@@ -93,6 +93,23 @@ change.
 | `voyage work unblock` |
 <!-- voyage-cli-reference:end -->
 
+## Distribution operations
+
+Use either the **source-checkout Skill bundle** or an **installable CLI artifact**.
+From a checkout, invoke `python3 <voyage-skill>/scripts/voyage.py`;
+from an installed artifact, invoke `voyage`. Both must expose the same command
+contract and version. Build tools are explicit build prerequisites, not runtime
+dependencies of the installed CLI.
+
+Construct and verify candidate artifacts outside the source tree. Preserve the
+source commit, artifact digest, interpreter, complete test totals, and raw
+command output. Never treat a wheel, archive, generated report, or successful
+test as project truth.
+
+Stop after local verification. Uploading, tagging, signing, or creating any
+remote release requires separate scoped User authorization; PLAN-0002 does not
+grant publication authority.
+
 ## Bootstrap and truth activation
 
 `voyage init` creates a `bootstrap` project. Generated product, governance,

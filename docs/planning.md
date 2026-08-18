@@ -2151,3 +2151,41 @@ active → retired | superseded
 3. 实现 D-0003、决策索引和必要的 active product/operations/Skill 最小合同，使 ST-0001 6/6 通过。
 4. 运行 12 项 focused、全仓、compileall、dogfood、CLI reference 和官方 Skill 校验。
 5. 创建实现提交作为不可变锚点，在其上重跑门禁，再追加 DEV-0010 CLOSE。
+
+---
+
+## 2026-08-19 · DEV-0010 · RW-000 · UPDATE
+
+- Status: in-progress; complete red baseline captured
+- Baseline: `417db699f87d0f768a4771a849c8759d601bf924`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 12 DEV-0010 tests and the six declared black-box helper interfaces were added before product or active-contract implementation
+- Non-goals: unchanged
+- Risk: light
+- Dependencies: DEV-0010 START test matrix
+- Acceptance gates: the focused suite must distinguish already-valid packaging metadata from absent distribution authority and absent helper behavior; test-design defects must be corrected before implementation
+- Actual result: expected FAIL; after correcting two test-expression defects without product changes, 12 tests produced 3 passes, 3 assertion failures, and 6 errors
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_distribution -v`
+- Readback: version/Python floor, common CLI main, and empty runtime dependency declaration already pass; D-0003 and the active two-surface/User-publication contract are absent; Skill only documents the checkout script; all six standard-library helper interfaces raise their planned `NotImplementedError`
+- Remaining issues: implement ST-0002 helpers, then D-0003 and the minimum active distribution wording for ST-0001
+- Next safe action: implement only `tests/distribution_support.py`, run all six DistributionHarnessTests, then rerun the 324 pre-PLAN-0002 regression tests before editing active contracts
+
+---
+
+## 2026-08-19 · DEV-0010 · RW-000 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `417db699f87d0f768a4771a849c8759d601bf924`
+- Anchor: pending
+- Supersedes: DEV-0010 START test-count field only; the original 12-case matrix remains unchanged and one supplemental drift guard is additive
+- Scope: ST-0001 and ST-0002 implemented; D-0003 fixes the two distribution surfaces and publication authority, active product/operations truth and Skill expose the minimum contract, and the standard-library black-box harness provides commit-only source copies, sanitized subprocesses, complete results, timeouts, tree snapshots, and disposable external workspaces
+- Non-goals: unchanged; no build fix, artifact, `--version`, external lifecycle journey, historical fixture, release report, publication, extension, or runtime state transition was added
+- Risk: light; all generated files remain outside the repository and active contract edits are bound to the User-authorized PLAN-0002 scope
+- Dependencies: complete red baseline, corrected test expressions, ST-0002 6/6, 324 pre-PLAN-0002 regression pass, and D-0003 satisfied
+- Acceptance gates: 13 focused tests, 337 complete tests, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, planning append-only history, no generated source residue, and diff hygiene
+- Actual result: PASS before commit; focused 13/13 and full 337/337 passed with 0 failures, 0 errors, and 0 skips; compileall, dogfood, CLI reference, official Skill validation, and diff check passed
+- Tests: the original 12 tests first produced 3 passes, 3 failures, and 6 errors; ST-0002 then passed 6/6 and all prior 324 tests passed; a final truth readback exposed decision index version 3 versus registry version 2, so `decision_index_version_matches_registered_truth_version` was added before its fix, failed 2 != 3, and passed after registry convergence
+- Readback: truth is operational with six activation-verified sources and decision-log version 3; recovery has zero unknown/conflicts/blocks/leases; `SKILL.md` remains progressively disclosed at 114 lines; the source-install baseline remains intentionally unfixed for RW-101
+- Remaining issues: create and verify the immutable RW-000 implementation commit, append CLOSE, then begin RW-101 with a complete artifact build/install test matrix
+- Next safe action: commit the RW-000 implementation, rerun all 13 focused and 337 repository tests plus acceptance gates against the exact SHA, then append DEV-0010 CLOSE
