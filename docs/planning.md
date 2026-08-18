@@ -1300,3 +1300,22 @@ active → retired | superseded
 - Readback: live-valid typed evidence is observed; expired/missing/tampered evidence and unprobed stateful or expired lease facts are unknown; legacy and current replay state are declared; same-scope runtime field disagreements and released-but-occupied ports are conflicts; conflicting observations are removed from observed; every fact has the fixed 11-field contract, scoped action, and required loop
 - Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned frontmatter, metadata, identity, schema, invocation, dogfood, and recovery contract checks pass
 - Next safe action: commit the MK-104 implementation, rerun all 191 tests and acceptance gates against the immutable commit, append DEV-0005 CLOSE with its SHA, then commit and push the close record before MK-201
+
+---
+
+## 2026-08-18 · DEV-0005 · MK-104 · CLOSE
+
+- Status: complete
+- Baseline: `3ee37c582fd987a743925f3ff3df7947ae44e569`
+- Anchor: `6f08ebf0d68ca8ac10ff8ee18a31842d5ad82178`
+- Supersedes: none
+- Scope: ST-1041 through ST-1045 delivered; recover now separates observed, declared, unknown, and conflicts with deterministic evidence readback, resource probing, scoped actions, and explicit required loops
+- Non-goals: unchanged; no new event type, monitor, arbitrary probe plugin, remote evidence, extension layering, or derived graph engine was introduced
+- Risk: standard; accepted only after immutable-anchor readback
+- Dependencies: MK-102 and MK-103 complete; DEV-0005 test-first START, red baseline, supplementary red test, and implementation-complete UPDATE satisfied
+- Acceptance gates: full regression, focused recovery suite, compilation, dogfood validation/truth/recovery, deterministic fixed-input readback, CLI/reference/document convergence, append-only planning, ledger non-mutation, clean implementation anchor, and exact commit diff hygiene
+- Actual result: PASS; immutable anchor rerun produced 191 passed, 0 failed, 0 skipped; focused recovery rerun produced 22 passed; compileall passed; dogfood validate returned no errors; truth remained operational with six activation-verified active sources; recover emitted all four buckets at the unchanged ledger head; CLI reference was current; `git diff HEAD^ HEAD --check` passed
+- Tests: all ST-1041 through ST-1045 cases and all 169 prior tests pass against the exact anchor above
+- Readback: anchor contains 6 changed files with 926 insertions and 13 deletions, including the 377-line recovery suite; the worktree was clean before this CLOSE append
+- Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned frontmatter, metadata, identity, schema, invocation, dogfood, and recovery checks pass
+- Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head, then begin MK-201 with a new test-first START record
