@@ -1447,3 +1447,22 @@ active → retired | superseded
 - Readback: explicit projects reject audit/channel/environment extension events until the mapped available extension is enabled and reject them again after disable; decisions must match action, project, extension, and version; reserved and unknown extensions cannot enable; enable/disable history remains replayable; effective contracts are additive and keep `independent-quality` mandatory; legacy projects replay old events without fabricated lifecycle state; init creates no extension file or enabled state
 - Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned frontmatter, metadata, identity, schema, invocation, dogfood, CLI, replay, extension, and recovery checks pass
 - Next safe action: commit the MK-201 implementation, rerun all 219 tests and acceptance gates against the immutable commit, append DEV-0006 CLOSE with its SHA, then commit and push the close record before MK-202
+
+---
+
+## 2026-08-18 · DEV-0006 · MK-201 · CLOSE
+
+- Status: complete
+- Baseline: `7cd0a041883b523da4e71d6d80701b36d22cadab`
+- Anchor: `a18af8f1486444019ddf27f90d51711f0aeb24f9`
+- Supersedes: none
+- Scope: ST-2011 through ST-2016 delivered; the permanent kernel is separated from versioned optional extensions, new projects use explicit extension mode, available extension lifecycle changes require scoped User decisions, extension events are gated, and legacy projects remain replay-compatible without fabricated state
+- Non-goals: unchanged; no plugin loader, remote catalog, advanced scheduler, appeal engine, quota billing, derived graph query, automatic rule expiry, delivery automation, or deployment automation was introduced
+- Risk: standard; accepted only after immutable-anchor readback confirmed that no core gate, authority loop, resource capability, evidence kind, block behavior, or minimal rule transition was weakened
+- Dependencies: MK-101 through MK-104 complete; DEV-0006 test-first START, fixed decisions, red baseline, recovery-fixture migration, and implementation-complete UPDATE satisfied
+- Acceptance gates: full regression, focused extension and recovery suites, compilation, dogfood validation/truth/recovery/extension status, deterministic CLI reference, runtime/schema/replay convergence, append-only planning, legacy compatibility, ledger non-mutation, clean implementation anchor, and exact commit diff hygiene
+- Actual result: PASS; immutable anchor rerun produced 219 passed, 0 failed, 0 skipped; focused extension rerun produced 28 passed; focused recovery rerun produced 22 passed; compileall passed; dogfood validate returned no errors; truth remained operational with six activation-verified active sources; recover and extension status remained `legacy-compatible` with no enabled or disabled extension history; CLI reference was current; `git diff HEAD^ HEAD --check` passed
+- Tests: all 28 ST-2011 through ST-2016 cases and all 191 prior tests pass against the exact anchor above; extension enable/disable scope, reserved rejection, event gating, additive core contracts, legacy replay, recovery reporting, CLI exchange, schema coverage, document markers, and smaller init artifacts are exercised
+- Readback: anchor contains 10 changed files with 976 insertions and 24 deletions, including the 432-line extension suite; HEAD exactly matched the anchor and the worktree was clean before this CLOSE append
+- Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned frontmatter, metadata, identity, schema, invocation, dogfood, CLI, replay, extension, recovery, and append-only contract checks pass
+- Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head contains both the implementation anchor and CLOSE commit, then begin MK-202 with a new test-first START record
