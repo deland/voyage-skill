@@ -48,6 +48,10 @@ change.
 | `voyage evidence record` |
 | `voyage evidence show` |
 | `voyage evidence verify` |
+| `voyage extension disable` |
+| `voyage extension enable` |
+| `voyage extension list` |
+| `voyage extension status` |
 | `voyage gate record` |
 | `voyage init` |
 | `voyage recover` |
@@ -121,6 +125,30 @@ voyage --root <project> truth migrate --decision <decision-id> --actor <governan
 Migration appends confirmation evidence and adds the operational stage; it does
 not rewrite earlier ledger events. Do not use migration to bypass a new
 bootstrap project's per-source activation.
+
+## Extension operations
+
+<!-- extension-operations:start -->
+New projects start with no enabled extension. Inspect the catalog and current
+state with `voyage extension list` and `voyage extension status`.
+
+Before enable, record a User decision whose scope contains action
+`extension.enable`, the exact `project_id`, an `extensions` array containing the
+target ID, and an `extension_versions` object mapping that ID to the requested
+catalog version. Then run:
+
+```bash
+voyage --root <project> extension enable <id> --version <version> --decision <decision-id> --actor <governance-principal>
+```
+
+Disable uses a separate User decision with action `extension.disable` and the
+same exact project, ID, and version scope, followed by `voyage extension
+disable`. Both transitions append history; neither rewrites past events or
+removes the core independent-quality gate. A `reserved` extension cannot be
+enabled. Projects created before the explicit marker report
+`legacy-compatible`: replay their old extension events without inventing enable
+history, then require the explicit lifecycle for future governed adoption.
+<!-- extension-operations:end -->
 
 ## Typed evidence protocol
 

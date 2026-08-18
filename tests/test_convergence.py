@@ -34,6 +34,7 @@ EXPECTED_WORK_SIDE = {"rejected", "blocked", "awaiting-user"}
 EXPECTED_RULE_STATES = {"proposed", "approved", "applied", "active", "retired", "superseded"}
 EXPECTED_EVENTS = {
     "project.initialized", "truth.activated", "project.migrated", "evidence.verified",
+    "extension.enabled", "extension.disabled",
     "decision.recorded", "decision.revoked", "observation.recorded", "environment.readback",
     "channel.sent", "channel.acknowledged", "channel.started", "audit.finding",
     "work.created", "work.authorized", "work.started", "work.delivered",

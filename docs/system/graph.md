@@ -14,22 +14,49 @@ contract. If the two disagree, runtime behavior must fail safely and the
 contract drift must be resolved in one tested change; a Schema file alone does
 not silently alter runtime authority.
 
-## Node types
+## Permanent kernel contract
 
-The minimum graph contains `project`, `principal`, `loop-binding`,
+<!-- kernel-contract:start -->
+The permanent kernel contains node types `project`, `principal`, `loop-binding`,
 `truth-source`, `decision`, `work-item`, `delivery`, `immutable-anchor`,
-`evidence`, `gate`, `resource`, `lease`, `environment`, `channel`, `rule`,
-`block`, and `external-anchor` nodes.
+`evidence`, `gate`, `resource`, `lease`, `rule`, `block`, and `external-anchor`.
+
+Its edge types are `governs`, `depends-on`, `authorized-by`, `bound-to-loop`,
+`assigned-to`, `delivered-via`, `claims`, `releases`, `produces`, `anchored-at`,
+`validated-by`, `rejects`, `blocks`, `unblocks`, `supersedes`, `retires`, and
+`escalates-to`. Its scoped permission loops are `execution`, `quality`,
+`governance`, and `audit`.
+
+The kernel always retains truth and User decisions, work and immutable
+delivery, typed evidence and independent quality, resources and leases, gates,
+append-only recovery, four-loop authority, minimum-scope blocks, and the
+minimal rule safety chain.
+<!-- kernel-contract:end -->
 
 Every node has a stable ID, type, schema version, status, scope, authority,
 provenance, risk, evidence references, and optional supersession reference.
 
-## Edge types
+## Optional extension contract
 
-The minimum graph supports `governs`, `depends-on`, `authorized-by`,
-`bound-to-loop`, `assigned-to`, `delivered-via`, `acknowledged-by`, `claims`,
-`releases`, `produces`, `anchored-at`, `validated-by`, `rejects`, `blocks`,
-`unblocks`, `supersedes`, `retires`, `readback-of`, and `escalates-to`.
+<!-- extension-contract:start -->
+The immutable version-1 catalog contains `advanced-audit`, `channel-tracking`,
+`environment-control`, `quota-cost`, `advanced-rules`, and `derived-graph`.
+`advanced-audit`, `channel-tracking`, and `environment-control` are available;
+the remaining entries are reserved and cannot be enabled before their behavior
+is implemented.
+
+`advanced-audit` gates `audit.finding`. `channel-tracking` adds node `channel`,
+edge `acknowledged-by`, and its sent/acknowledged/started events.
+`environment-control` adds node `environment`, edge `readback-of`, and
+`environment.readback`. These additions do not remove a kernel type or gate.
+Environment resources and runtime-readback evidence remain usable kernel types;
+the optional extension controls the advanced environment workflow event.
+
+Enable or disable only through append-only events bound to an exact User
+decision and catalog version. Disabled history remains replayable. Projects
+without the explicit initialization marker remain legacy-compatible and do not
+gain invented extension state.
+<!-- extension-contract:end -->
 
 Every edge names its endpoints, preconditions, creating permission, required
 evidence, invalidation conditions, and failure transition.

@@ -13,6 +13,10 @@ from .core import (
     active_leases,
     append_event,
     current_state,
+    disable_extension,
+    enable_extension,
+    extension_catalog_view,
+    extension_status,
     initialize_project,
     load_evidence,
     load_json,
@@ -85,6 +89,17 @@ def build_parser() -> argparse.ArgumentParser:
     migrate = truth_sub.add_parser("migrate", help="Confirm a v0.1 legacy project through a scoped User decision")
     migrate.add_argument("--decision", required=True, help="Recorded User decision ID covering truth.migrate")
     common_actor(migrate, loop="governance")
+
+    extension = sub.add_parser("extension", help="Inspect and govern optional extensions")
+    extension_sub = extension.add_subparsers(dest="extension_command", required=True)
+    extension_sub.add_parser("list", help="List the immutable extension catalog")
+    extension_sub.add_parser("status", help="Show enabled, disabled, reserved, and effective contracts")
+    for action in ("enable", "disable"):
+        action_parser = extension_sub.add_parser(action, help=f"{action.title()} one exact extension version")
+        action_parser.add_argument("extension_id")
+        action_parser.add_argument("--version", required=True)
+        action_parser.add_argument("--decision", required=True, help=f"Recorded User decision covering extension.{action}")
+        common_actor(action_parser, loop="governance")
 
     work = sub.add_parser("work", help="Operate work items")
     work_sub = work.add_subparsers(dest="work_command", required=True)
@@ -450,6 +465,31 @@ def handle_truth(paths, args) -> None:
         })
 
 
+def handle_extension(paths, args) -> None:
+    if args.extension_command == "list":
+        emit({"catalog": extension_catalog_view()})
+    elif args.extension_command == "status":
+        emit(extension_status(paths))
+    elif args.extension_command == "enable":
+        event = enable_extension(
+            paths,
+            actor=args.actor,
+            extension_id=args.extension_id,
+            version=args.version,
+            decision_id=args.decision,
+        )
+        emit({"extension": args.extension_id, "version": args.version, "status": "enabled", "event": event["event_id"]})
+    elif args.extension_command == "disable":
+        event = disable_extension(
+            paths,
+            actor=args.actor,
+            extension_id=args.extension_id,
+            version=args.version,
+            decision_id=args.decision,
+        )
+        emit({"extension": args.extension_id, "version": args.version, "status": "disabled", "event": event["event_id"]})
+
+
 def run(args: argparse.Namespace) -> int:
     if args.command == "init":
         paths = initialize_project(args.root, args.project_id, args.truth_registry)
@@ -483,6 +523,8 @@ def run(args: argparse.Namespace) -> int:
         handle_work(paths, args)
     elif args.command == "truth":
         handle_truth(paths, args)
+    elif args.command == "extension":
+        handle_extension(paths, args)
     elif args.command == "gate":
         append_from_args(
             paths, args, event_type="gate.recorded", subject=args.work,

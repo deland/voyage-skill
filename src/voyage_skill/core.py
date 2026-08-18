@@ -24,11 +24,57 @@ STATEFUL_RESOURCE_TYPES = {"account", "environment", "session", "window", "quota
 ALLOWED_RESOURCE_TYPES = {"file", "account", "port", "environment", "session", "window", "quota"}
 ALLOWED_RESOURCE_MODES = {"exclusive", "shared-read", "serialized", "rebuildable"}
 REQUIRED_TRUTH_DOMAINS = ("product", "governance", "system", "operations")
+KERNEL_LOOPS = ("audit", "execution", "governance", "quality")
+KERNEL_NODE_TYPES = (
+    "project", "principal", "loop-binding", "truth-source", "decision",
+    "work-item", "delivery", "immutable-anchor", "evidence", "gate",
+    "resource", "lease", "rule", "block", "external-anchor",
+)
+KERNEL_EDGE_TYPES = (
+    "governs", "depends-on", "authorized-by", "bound-to-loop", "assigned-to",
+    "delivered-via", "claims", "releases", "produces", "anchored-at",
+    "validated-by", "rejects", "blocks", "unblocks", "supersedes", "retires",
+    "escalates-to",
+)
+EXTENSION_CATALOG = {
+    "advanced-audit": {
+        "id": "advanced-audit", "version": "1.0.0", "availability": "available",
+        "event_types": ("audit.finding",), "node_types": (), "edge_types": (), "gates": (),
+    },
+    "channel-tracking": {
+        "id": "channel-tracking", "version": "1.0.0", "availability": "available",
+        "event_types": ("channel.sent", "channel.acknowledged", "channel.started"),
+        "node_types": ("channel",), "edge_types": ("acknowledged-by",), "gates": (),
+    },
+    "environment-control": {
+        "id": "environment-control", "version": "1.0.0", "availability": "available",
+        "event_types": ("environment.readback",), "node_types": ("environment",),
+        "edge_types": ("readback-of",), "gates": (),
+    },
+    "quota-cost": {
+        "id": "quota-cost", "version": "1.0.0", "availability": "reserved",
+        "event_types": (), "node_types": (), "edge_types": (), "gates": (),
+    },
+    "advanced-rules": {
+        "id": "advanced-rules", "version": "1.0.0", "availability": "reserved",
+        "event_types": (), "node_types": (), "edge_types": (), "gates": (),
+    },
+    "derived-graph": {
+        "id": "derived-graph", "version": "1.0.0", "availability": "reserved",
+        "event_types": (), "node_types": (), "edge_types": (), "gates": (),
+    },
+}
+EXTENSION_EVENT_REQUIREMENTS = {
+    event_type: extension_id
+    for extension_id, contract in EXTENSION_CATALOG.items()
+    for event_type in contract["event_types"]
+}
 WORK_DURABLE_STATES = ("draft", "authorized", "active", "delivered", "quality-passed", "accepted", "closed")
 WORK_SIDE_STATES = ("rejected", "blocked", "awaiting-user")
 RULE_DURABLE_STATES = ("proposed", "approved", "applied", "active", "retired", "superseded")
 SUPPORTED_EVENT_TYPES = frozenset({
     "project.initialized", "truth.activated", "project.migrated", "evidence.verified",
+    "extension.enabled", "extension.disabled",
     "decision.recorded", "decision.revoked", "observation.recorded", "environment.readback",
     "channel.sent", "channel.acknowledged", "channel.started", "audit.finding",
     "work.created", "work.authorized", "work.started", "work.delivered",
@@ -99,6 +145,16 @@ def parse_time(value: str) -> datetime:
 
 def canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def extension_catalog_view() -> dict[str, dict[str, Any]]:
+    return {
+        extension_id: {
+            key: [deepcopy(item) for item in value] if isinstance(value, tuple) else deepcopy(value)
+            for key, value in contract.items()
+        }
+        for extension_id, contract in EXTENSION_CATALOG.items()
+    }
 
 
 def content_hash(value: Any) -> str:
@@ -521,19 +577,9 @@ def initialize_project(root: str | Path, project_id: str, truth_registry_path: s
     }
     graph = {
         "schema_version": SCHEMA_VERSION,
-        "node_types": [
-            "project", "principal", "loop-binding", "truth-source", "decision",
-            "work-item", "delivery", "immutable-anchor", "evidence", "gate",
-            "resource", "lease", "environment", "channel", "rule", "block",
-            "external-anchor",
-        ],
-        "edge_types": [
-            "governs", "depends-on", "authorized-by", "bound-to-loop", "assigned-to",
-            "delivered-via", "acknowledged-by", "claims", "releases", "produces",
-            "anchored-at", "validated-by", "rejects", "blocks", "unblocks",
-            "supersedes", "retires", "readback-of", "escalates-to",
-        ],
-        "loops": sorted(LOOPS - {"user", "system"}),
+        "node_types": list(KERNEL_NODE_TYPES),
+        "edge_types": list(KERNEL_EDGE_TYPES),
+        "loops": list(KERNEL_LOOPS),
     }
     resources = {"schema_version": SCHEMA_VERSION, "resources": []}
     gates = {
@@ -608,7 +654,7 @@ def initialize_project(root: str | Path, project_id: str, truth_registry_path: s
         event_type="project.initialized",
         subject=project_id,
         risk="standard",
-        payload={"schema_version": SCHEMA_VERSION, "project_stage": "bootstrap"},
+        payload={"schema_version": SCHEMA_VERSION, "project_stage": "bootstrap", "extension_mode": "explicit"},
     )
     return paths
 
@@ -827,6 +873,8 @@ def _initial_state() -> dict[str, Any]:
     return {
         "project_id": None,
         "project_stage": "legacy-bootstrap",
+        "extension_mode": "legacy-compatible",
+        "extensions": {},
         "truth_activations": {},
         "works": {},
         "leases": {},
@@ -888,6 +936,31 @@ def _require_decision_scope(
     return decision
 
 
+def _require_extension_decision_scope(
+    state: dict[str, Any],
+    decision_id: Any,
+    *,
+    action: str,
+    project_id: str,
+    extension_id: str,
+    version: str,
+) -> dict[str, Any]:
+    decision = state["decisions"].get(decision_id)
+    _require(decision is not None, f"extension {action} requires a recorded User decision")
+    _require(not decision.get("revoked"), f"extension {action} decision is revoked")
+    _require(decision.get("loop") == "user", f"extension {action} requires User-loop authority")
+    scope = decision.get("payload", {}).get("scope")
+    _require(isinstance(scope, dict), f"extension {action} decision requires object scope")
+    actions = scope.get("actions")
+    _require(isinstance(actions, list) and action in actions, f"extension decision does not cover action {action}")
+    _require(scope.get("project_id") == project_id, "extension decision does not cover this project")
+    extensions = scope.get("extensions")
+    _require(isinstance(extensions, list) and extension_id in extensions, "extension decision does not cover this extension")
+    versions = scope.get("extension_versions")
+    _require(isinstance(versions, dict) and versions.get(extension_id) == version, "extension decision does not cover this version")
+    return decision
+
+
 def _work(state: dict[str, Any], work_id: str) -> dict[str, Any]:
     work = state["works"].get(work_id)
     if work is None:
@@ -932,12 +1005,94 @@ def replay_events(
         anchor = event.get("anchor")
         evidence = event.get("evidence") or []
 
+        required_extension = EXTENSION_EVENT_REQUIREMENTS.get(event_type)
+        if required_extension and state["extension_mode"] == "explicit":
+            extension = state["extensions"].get(required_extension)
+            _require(
+                extension is not None and extension.get("status") == "enabled",
+                f"extension {required_extension} is not enabled for event {event_type}",
+            )
+
         if event_type == "project.initialized":
             _require(loop == "system", "project initialization requires system loop")
             stage = payload.get("project_stage", "legacy-bootstrap")
             _require(stage in {"bootstrap", "legacy-bootstrap"}, f"invalid initial project stage: {stage}")
             state["project_stage"] = stage
             state["project_id"] = subject
+            extension_mode = payload.get("extension_mode", "legacy-compatible")
+            _require(extension_mode in {"explicit", "legacy-compatible"}, "invalid extension mode")
+            state["extension_mode"] = extension_mode
+
+        elif event_type == "extension.enabled":
+            _require(loop == "governance", "extension enable requires governance loop")
+            extension_id = payload.get("extension_id")
+            version = payload.get("version")
+            contract = EXTENSION_CATALOG.get(extension_id)
+            _require(contract is not None, f"unknown extension: {extension_id}")
+            _require(contract["availability"] == "available", f"extension is reserved: {extension_id}")
+            _require(subject == extension_id, "extension enable subject must match extension_id")
+            _require(version == contract["version"], f"extension version mismatch: {version}")
+            _require(payload.get("contract") == extension_catalog_view()[extension_id], "extension enable contract snapshot mismatch")
+            _require_extension_decision_scope(
+                state,
+                event.get("authorization"),
+                action="extension.enable",
+                project_id=state["project_id"],
+                extension_id=extension_id,
+                version=version,
+            )
+            previous = state["extensions"].get(extension_id)
+            _require(previous is None or previous.get("status") != "enabled", f"extension already enabled: {extension_id}")
+            history = list(previous.get("history", [])) if previous else []
+            history.append({
+                "type": event_type,
+                "event_id": event["event_id"],
+                "decision_id": event.get("authorization"),
+                "version": version,
+            })
+            state["extension_mode"] = "explicit"
+            state["extensions"][extension_id] = {
+                "status": "enabled",
+                "version": version,
+                "enabled_event": event["event_id"],
+                "enabled_decision": event.get("authorization"),
+                "disabled_event": None,
+                "disabled_decision": None,
+                "history": history,
+            }
+
+        elif event_type == "extension.disabled":
+            _require(loop == "governance", "extension disable requires governance loop")
+            extension_id = payload.get("extension_id")
+            version = payload.get("version")
+            contract = EXTENSION_CATALOG.get(extension_id)
+            _require(contract is not None, f"unknown extension: {extension_id}")
+            _require(subject == extension_id, "extension disable subject must match extension_id")
+            _require(version == contract["version"], f"extension version mismatch: {version}")
+            _require_extension_decision_scope(
+                state,
+                event.get("authorization"),
+                action="extension.disable",
+                project_id=state["project_id"],
+                extension_id=extension_id,
+                version=version,
+            )
+            previous = state["extensions"].get(extension_id)
+            _require(previous is not None and previous.get("status") == "enabled", f"extension is not enabled: {extension_id}")
+            _require(previous.get("version") == version, f"enabled extension version mismatch: {extension_id}")
+            history = list(previous["history"])
+            history.append({
+                "type": event_type,
+                "event_id": event["event_id"],
+                "decision_id": event.get("authorization"),
+                "version": version,
+            })
+            previous.update(
+                status="disabled",
+                disabled_event=event["event_id"],
+                disabled_decision=event.get("authorization"),
+                history=history,
+            )
 
         elif event_type == "truth.activated":
             _require(loop == "governance", "truth activation requires governance loop")
@@ -1746,6 +1901,110 @@ def _validate_bootstrap_contract(source: dict[str, Any], content: str) -> None:
     _require("- Status: draft" in content, f"truth contract {source.get('id')} must be draft before activation")
 
 
+def enable_extension(
+    paths: ProjectPaths,
+    *,
+    actor: str,
+    extension_id: str,
+    version: str,
+    decision_id: str,
+) -> dict[str, Any]:
+    contract = EXTENSION_CATALOG.get(extension_id)
+    if contract is None:
+        raise VoyageError(f"unknown extension: {extension_id}")
+    if contract["availability"] != "available":
+        raise VoyageError(f"extension is reserved: {extension_id}")
+    if version != contract["version"]:
+        raise VoyageError(f"extension version mismatch: expected {contract['version']}, got {version}")
+    return append_event(
+        paths,
+        actor=actor,
+        loop="governance",
+        event_type="extension.enabled",
+        subject=extension_id,
+        risk="standard",
+        payload={
+            "extension_id": extension_id,
+            "version": version,
+            "contract": extension_catalog_view()[extension_id],
+        },
+        authorization=decision_id,
+    )
+
+
+def disable_extension(
+    paths: ProjectPaths,
+    *,
+    actor: str,
+    extension_id: str,
+    version: str,
+    decision_id: str,
+) -> dict[str, Any]:
+    contract = EXTENSION_CATALOG.get(extension_id)
+    if contract is None:
+        raise VoyageError(f"unknown extension: {extension_id}")
+    if version != contract["version"]:
+        raise VoyageError(f"extension version mismatch: expected {contract['version']}, got {version}")
+    return append_event(
+        paths,
+        actor=actor,
+        loop="governance",
+        event_type="extension.disabled",
+        subject=extension_id,
+        risk="standard",
+        payload={"extension_id": extension_id, "version": version},
+        authorization=decision_id,
+    )
+
+
+def effective_contract(paths: ProjectPaths) -> dict[str, Any]:
+    graph = load_json(paths.graph)
+    gates = load_json(paths.gates).get("gates", [])
+    state = current_state(paths)
+    nodes = list(graph.get("node_types", []))
+    edges = list(graph.get("edge_types", []))
+    effective_gates = deepcopy(gates) if isinstance(gates, list) else []
+    for extension_id, extension in sorted(state["extensions"].items()):
+        if extension.get("status") != "enabled":
+            continue
+        contract = EXTENSION_CATALOG[extension_id]
+        for node in contract["node_types"]:
+            if node not in nodes:
+                nodes.append(node)
+        for edge in contract["edge_types"]:
+            if edge not in edges:
+                edges.append(edge)
+        known_gates = {item.get("id") for item in effective_gates if isinstance(item, dict)}
+        for gate in contract["gates"]:
+            if gate.get("id") not in known_gates:
+                effective_gates.append(deepcopy(gate))
+    return {
+        "node_types": nodes,
+        "edge_types": edges,
+        "loops": list(graph.get("loops", [])),
+        "gates": effective_gates,
+    }
+
+
+def extension_status(paths: ProjectPaths) -> dict[str, Any]:
+    state = current_state(paths)
+    extensions = deepcopy(state["extensions"])
+    for extension in extensions.values():
+        extension["next_safe_action"] = (
+            "disable with a scoped User decision"
+            if extension["status"] == "enabled"
+            else "enable with a new scoped User decision"
+        )
+    return {
+        "mode": state["extension_mode"],
+        "enabled": sorted(key for key, value in extensions.items() if value.get("status") == "enabled"),
+        "disabled": sorted(key for key, value in extensions.items() if value.get("status") == "disabled"),
+        "reserved": sorted(key for key, value in EXTENSION_CATALOG.items() if value["availability"] == "reserved"),
+        "extensions": extensions,
+        "effective_contract": effective_contract(paths),
+    }
+
+
 def activate_truth(
     paths: ProjectPaths,
     *,
@@ -2384,6 +2643,7 @@ def recovery_snapshot(
         "active_blocks": active_blocks,
         "rules": state["rules"],
         "volatile_recheck_required": [lease["resource_id"] for lease in leases if lease["stateful"] or lease["expired"]],
+        "extensions": extension_status(paths),
         **facts,
     }
 

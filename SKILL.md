@@ -69,6 +69,14 @@ participants from observed, and block only the reported scope.
 
 ## Load authoritative detail
 
+<!-- extension-loading:start -->
+For an extension-related task, run `voyage extension status` first. Resolve the
+active system truth through the manifest and truth registry, then read only its
+extension contract section needed for the requested extension. Treat reserved
+catalog entries as unavailable, and never infer an extension file path or load
+extension detail for an unrelated core task.
+<!-- extension-loading:end -->
+
 - Resolve the truth registry from the managed project's manifest.
 - Resolve the one active, activation-verified source for each required domain:
   `product`, `governance`, `system`, and `operations`.

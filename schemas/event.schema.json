@@ -20,6 +20,8 @@
         "decision.revoked",
         "environment.readback",
         "evidence.verified",
+        "extension.disabled",
+        "extension.enabled",
         "gate.recorded",
         "observation.recorded",
         "project.initialized",

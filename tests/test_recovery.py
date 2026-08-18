@@ -32,6 +32,30 @@ class RecoveryTestCase(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.paths = operational_project(self.root, "recovery-example")
+        core.append_event(
+            self.paths,
+            actor="user",
+            loop="user",
+            event_type="decision.recorded",
+            subject="USER-ENABLE-ENVIRONMENT-CONTROL",
+            risk="standard",
+            payload={
+                "decision": "extension.enable",
+                "scope": {
+                    "actions": ["extension.enable"],
+                    "project_id": "recovery-example",
+                    "extensions": ["environment-control"],
+                    "extension_versions": {"environment-control": "1.0.0"},
+                },
+            },
+        )
+        core.enable_extension(
+            self.paths,
+            actor="gov",
+            extension_id="environment-control",
+            version="1.0.0",
+            decision_id="USER-ENABLE-ENVIRONMENT-CONTROL",
+        )
         self.now = datetime.now(timezone.utc).replace(microsecond=0)
 
     def tearDown(self) -> None:

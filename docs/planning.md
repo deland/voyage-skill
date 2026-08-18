@@ -1319,3 +1319,131 @@ active → retired | superseded
 - Readback: anchor contains 6 changed files with 926 insertions and 13 deletions, including the 377-line recovery suite; the worktree was clean before this CLOSE append
 - Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned frontmatter, metadata, identity, schema, invocation, dogfood, and recovery checks pass
 - Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head, then begin MK-201 with a new test-first START record
+
+---
+
+## 2026-08-18 · DEV-0006 · MK-201 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `7cd0a041883b523da4e71d6d80701b36d22cadab`
+- Anchor: pending
+- Supersedes: none
+- Scope: separate the permanent kernel from optional extension contracts, minimize new-project graph declarations, add explicit decision-bound extension enable/disable state, gate extension event writes, preserve legacy replay, and expose deterministic CLI/recovery status
+- Non-goals: no advanced audit scheduler or appeal engine, no delivery/deployment automation, no quota billing, no automatic rule expiry, no derived graph queries, no extension plugin loader, and no remote catalog
+- Risk: standard; an incorrect split could silently remove a core guard or allow extension behavior without authorization
+- Dependencies: MK-101 through MK-104 complete; local and remote branch both resolve to the baseline above
+- Acceptance gates: every ST-2011 through ST-2016 test below is added before product implementation and observed failing for the documented gap; each subtask passes its own tests plus cumulative extension tests; final full regression, compileall, dogfood validate/truth/recover, CLI reference, schema coverage, append-only planning, legacy compatibility, and diff hygiene pass
+- Actual result: pending
+- Tests: ST-2011 through ST-2016 defined below
+- Readback: current init declares 17 node types and 19 edge types including optional channel/environment semantics; runtime accepts extension events without an enable decision; no extension lifecycle or recovery status exists
+- Remaining issues: active docs describe all mechanisms as one layer and Skill has no conditional extension-loading protocol
+- Next safe action: add the complete MK-201 suite without product edits, capture the red baseline, then implement ST-2011 first
+
+### DEV-0006 固定分层决策
+
+1. The permanent kernel remains: truth/User decisions, work and immutable delivery, typed evidence and independent quality, known resources and leases, append-only ledger and recovery, four loop boundaries, blocks, mandatory gates, and the minimal propose/approve/apply/verify/retire rule chain.
+2. New init graph types are exact runtime contract constants and exclude optional `channel` and `environment` nodes plus `acknowledged-by` and `readback-of` edges. Audit loop authority, resource type `environment`, and runtime-readback evidence remain core capabilities; only advanced workflows are optional.
+3. Extension state lives in append-only `extension.enabled`/`extension.disabled` events. Init creates no extension-specific file and no enabled extension state.
+4. The catalog has six stable IDs: `advanced-audit`, `channel-tracking`, `environment-control`, `quota-cost`, `advanced-rules`, and `derived-graph`. The first three are available because their existing events are implemented; the last three are `reserved` and cannot be enabled until their own milestones deliver behavior.
+5. Enable and disable require governance authority plus an existing non-revoked User decision scoped to the exact project, action (`extension.enable` or `extension.disable`), extension ID, and catalog version. The event records the immutable catalog contract including added event/node/edge/gate sets.
+6. In explicit-extension projects, `audit.finding`, `channel.sent`/`acknowledged`/`started`, and `environment.readback` require their mapped extension to be enabled at that ledger point. Core work/resource/rule/audit-block operations remain available without extensions.
+7. Projects initialized before explicit-extension mode replay legacy extension events without inventing enable history. New extension lifecycle events opt that project into explicit mode; new init starts explicit immediately.
+8. Disable never rewrites or deletes past facts, requires User approval, records the disabled version, and prevents later extension events. Recovery reports enabled and disabled history with next safe actions.
+9. No extension may remove or weaken a core mandatory gate. Catalog gate additions are additive; MK-201 available extensions add no mandatory global gate because their scope-specific gate semantics are not yet implemented.
+10. Skill reads the active system extension contract only for extension-related tasks and never loads reserved extension implementation as if it existed.
+
+### ST-2011 · 最小永久内核 init
+
+实现前测试用例：
+
+1. `new_init_graph_matches_exact_kernel_contract`：node/edge/loop 集合精确等于 runtime kernel constants，不含 channel/environment 扩展类型。
+2. `new_init_creates_no_extension_specific_files_or_enabled_state`：init 不创建 extension 目录/配置文件，replay 的 extensions 为空。
+3. `kernel_init_still_supports_complete_core_work_lifecycle`：无扩展项目仍可完成授权、资源、交付、独立质量、接受与关闭。
+4. `kernel_contract_keeps_audit_authority_and_environment_resources`：audit loop 与 environment 资源类型仍属于永久内核，不被错误移除。
+
+### ST-2012 · 扩展目录与显式 enable
+
+实现前测试用例：
+
+1. `extension_catalog_has_six_stable_versioned_entries`：六个 ID、版本、availability、event/node/edge/gate 集合确定且可序列化。
+2. `available_extension_enable_requires_exact_user_scope`：缺 decision、非 User、被撤销、错误 project/action/extension/version 均拒绝。
+3. `extension_enable_records_catalog_contract_and_state`：成功 enable 事件携带精确 catalog snapshot，state 标记 enabled/version/decision/event。
+4. `reserved_or_unknown_extension_cannot_enable`：reserved 和未知 ID 明确拒绝，不制造半状态。
+5. `duplicate_or_version_mismatched_enable_is_rejected`：重复 enable 和非 catalog version 均拒绝。
+
+### ST-2013 · disable、审计与门禁不可静默放宽
+
+实现前测试用例：
+
+1. `extension_disable_requires_exact_user_scope_and_enabled_version`：disable 使用独立 action decision，且必须匹配当前 enabled version。
+2. `extension_disable_preserves_history_and_marks_disabled`：历史 enable 不删除，state/recovery 保留 enabled/disabled event 和 decisions。
+3. `disable_without_decision_or_with_active_mismatch_is_atomic`：失败 disable 不追加事件、不改变 head。
+4. `extension_contract_cannot_remove_core_gate`：catalog additions 与 effective contract 只能叠加，`independent-quality` 永远存在且 mandatory。
+
+### ST-2014 · 扩展事件写门禁与 legacy replay
+
+实现前测试用例：
+
+1. `explicit_project_rejects_extension_events_before_enable`：三组扩展事件在未启用时分别拒绝。
+2. `enabled_extension_allows_only_its_mapped_events`：启用 channel 不会放开 environment/audit，启用对应扩展后才允许。
+3. `disabled_extension_rejects_later_events`：disable 后未来同类事件拒绝，既有事件仍可 replay/recover。
+4. `core_events_and_minimal_audit_block_work_without_extensions`：work、resource、minimal rule、work.blocked 不依赖扩展。
+5. `legacy_project_replays_pre_layer_extension_events`：无 explicit marker 的旧 project/ledger 可读取旧 channel/environment/audit 事件。
+
+### ST-2015 · CLI、恢复与 schema 收敛
+
+实现前测试用例：
+
+1. `extension_cli_lists_catalog_and_current_status`：`extension list/status` 输出稳定 JSON、availability 和 effective core contract。
+2. `extension_cli_enable_disable_round_trip`：CLI 使用 decision 完成 enable/disable，恢复输出一致。
+3. `recovery_reports_extension_history_and_next_safe_action`：recover 显式报告 enabled/disabled/reserved，不将 reserved 伪装为 active。
+4. `extension_events_match_runtime_schema_and_replay`：新事件进入 runtime/schema/CLI exchange 精确集合并有 replay 覆盖。
+5. `cli_reference_includes_all_extension_leaf_commands`：argparse 派生 runbook 覆盖 list/status/enable/disable。
+
+### ST-2016 · Active 文档、Skill 与 dogfood
+
+实现前测试用例：
+
+1. `system_graph_documents_exact_kernel_and_catalog_contract`：active system truth 的 marker 与 runtime constants/catalog 一致。
+2. `skill_loads_extension_contract_only_for_extension_tasks`：Skill 明确先看 status，仅在相关任务加载 active system extension section，不硬编码扩展文件路径。
+3. `runbook_documents_decision_bound_enable_disable_and_legacy_behavior`：operations truth 描述 exact decision scope、reserved 拒绝和 legacy replay 边界。
+4. `dogfood_project_remains_valid_and_reports_legacy_extension_mode`：仓库自身作为已存在项目保持 valid/recoverable，明确 legacy-compatible 而非伪造 enable history。
+5. `minimal_init_artifact_contract_is_smaller_than_v01_baseline`：新 graph node/edge 总数低于 17/19，且无扩展文件。
+
+---
+
+## 2026-08-18 · DEV-0006 · MK-201 · UPDATE
+
+- Status: in-progress; red baseline captured
+- Baseline: `7cd0a041883b523da4e71d6d80701b36d22cadab`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 28 ST-2011 through ST-2016 tests added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0006 START matrix and fixed layering decisions
+- Acceptance gates: extension suite must expose oversized init, missing catalog/lifecycle/status, absent decision scope, unguarded extension events, missing CLI/schema/recovery integration, and absent active-document markers before implementation
+- Actual result: expected FAIL; 28 tests ran, with 7 assertion failures and 24 errors including subtests; the existing core lifecycle and minimal audit-block/rule behavior passed
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-skill-pycache python3 -B -m unittest tests.test_extensions -v`
+- Readback: failures map only to the planned MK-201 gaps; CLI absence, missing constants/APIs/state, 17/19 init graph, permissive extension events, and missing markers are all visible
+- Remaining issues: all ST-2011 through ST-2016 implementation work remains
+- Next safe action: implement ST-2011 exact kernel constants, smaller init graph, and explicit extension mode marker; run KernelInitializationTests before ST-2012
+
+---
+
+## 2026-08-18 · DEV-0006 · MK-201 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `7cd0a041883b523da4e71d6d80701b36d22cadab`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-2011 through ST-2016 implemented; new projects now start from a 15-node/17-edge permanent kernel, optional behavior is represented by a six-entry versioned catalog, and available extensions use decision-bound append-only enable/disable events with explicit event gates, recovery state, and CLI operations
+- Non-goals: unchanged; no extension plugin loader, remote catalog, advanced scheduler, appeal engine, quota billing, derived graph query, automatic rule expiry, delivery automation, or deployment automation was added
+- Risk: standard; core independent quality, audit authority, environment resources, runtime-readback evidence, minimum-scope blocks, and the minimal rule chain remain available without an extension
+- Dependencies: MK-101 through MK-104, DEV-0006 fixed layering decisions, complete pre-implementation test matrix, and recorded red baseline satisfied
+- Acceptance gates: 219-test full regression, 28-test extension suite, 22-test recovery suite, compileall, dogfood validate/truth/recover/extension status, CLI reference, schema/runtime/replay convergence, append-only planning, legacy compatibility, read-only recovery, and diff hygiene
+- Actual result: PASS before commit; 219 passed, 0 failed, 0 skipped; all 28 extension tests and all 22 recovery tests passed; compileall passed with cache under `/tmp`; dogfood validate returned no errors, truth remained operational with six activation-verified active sources, recover and extension status reported `legacy-compatible` with no invented enable history, CLI reference was current, and `git diff --check` passed
+- Tests: all 28 ST-2011 through ST-2016 cases were added before product implementation and exposed 7 assertion failures plus 24 errors including subtests; after implementation, the focused extension suite and the full suite passed; recovery fixtures were migrated to enable `environment-control` through a real scoped User decision before runtime-readback events, preserving the new gate and read-only ledger assertions
+- Readback: explicit projects reject audit/channel/environment extension events until the mapped available extension is enabled and reject them again after disable; decisions must match action, project, extension, and version; reserved and unknown extensions cannot enable; enable/disable history remains replayable; effective contracts are additive and keep `independent-quality` mandatory; legacy projects replay old events without fabricated lifecycle state; init creates no extension file or enabled state
+- Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned frontmatter, metadata, identity, schema, invocation, dogfood, CLI, replay, extension, and recovery checks pass
+- Next safe action: commit the MK-201 implementation, rerun all 219 tests and acceptance gates against the immutable commit, append DEV-0006 CLOSE with its SHA, then commit and push the close record before MK-202
