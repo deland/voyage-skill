@@ -1968,3 +1968,22 @@ active → retired | superseded
 - Repository readback: the anchor contains 10 changed files with 1,316 insertions and 21 deletions; `SKILL.md` remains progressively disclosed at 112 lines; the dependency-free equivalent skill validator and repository metadata tests pass
 - Remaining issues: the official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; snapshot review remains intentionally deferred unless a future valid 100,000-event sample reaches a fixed threshold and a separate User-approved work item is opened
 - Next safe action: commit and push this append-only CLOSE record, verify the remote branch head, then review PLAN-0001 for merge or release; do not add another permanent-kernel feature without a new planned and authorized work item
+
+---
+
+## 2026-08-19 · PLAN-0001 · CLOSE
+
+- Status: complete and merged
+- Baseline: `cf9f465644154881738ffbb4bf08c9bf08f888d8`
+- Anchor: `afb34f4e5cb155643477f6f76b1334736b7de9ef`
+- Supersedes: PLAN-0001 active status only; all prior plan, START, UPDATE, and CLOSE records remain authoritative history
+- Scope: formally close the minimal-kernel convergence plan after MK-000, MK-101, MK-102, MK-103, MK-104, MK-201, MK-202, MK-301, and MK-302 were completed, reviewed, fast-forward merged, pushed, and read back from remote `main`
+- Non-goals: no new kernel feature, extension enablement, snapshot, platform adapter, release artifact, branch deletion, or PLAN-0002 scope is introduced by this closure
+- Risk: light; this record reconciles completed immutable delivery state and does not change runtime behavior or external project state
+- Dependencies: all nine child work CLOSE records, implementation anchors, delivery-record commits, final branch review, clean worktrees, and remote `main` readback satisfied
+- Acceptance gates: every PLAN-0001 Work ID has one append-only CLOSE record; `main`, `origin/main`, `xp/plan-minimal-kernel`, and its remote branch resolve to the merged delivery head before this planning append; 324 repository tests, compileall, dogfood validate, CLI reference, dependency-free metadata validation, and official `quick_validate.py` pass; planning remains append-only
+- Actual result: PASS; the complete 19-commit delivery series was reviewed without blocking findings and fast-forward merged from `cf9f465644154881738ffbb4bf08c9bf08f888d8` to `afb34f4e5cb155643477f6f76b1334736b7de9ef`; remote `main` and the retained development branch both read back the merged SHA
+- Tests: all 324 repository tests passed with 0 failures, 0 errors, and 0 skips against the merged tree; compilation, repository dogfood validation, deterministic CLI reference, append-only planning checks, equivalent Skill metadata validation, and the official skill-creator validator passed
+- Readback: the project is operational with six activation-verified truth sources, no missing domain, no unverified active source, zero active blocks or leases, zero unknown or conflicting recovery facts, Darwin `fcntl` append-safe writes, and explicitly non-cryptographic local-caller actor identity
+- Remaining issues: no authorized PLAN-0001 implementation remains; legacy truth activation evidence remains declared rather than typed-observed but does not block the operational project; snapshot work remains prohibited below the fixed threshold; any new permanent-kernel or extension work requires a new appended plan and User authority
+- Next safe action: commit and push this append-only plan closure on the development branch, then ask the User to authorize a PLAN-0002 objective before starting further product development
