@@ -33,7 +33,7 @@ EXPECTED_WORK_DURABLE = {"draft", "authorized", "active", "delivered", "quality-
 EXPECTED_WORK_SIDE = {"rejected", "blocked", "awaiting-user"}
 EXPECTED_RULE_STATES = {"proposed", "approved", "applied", "active", "retired", "superseded"}
 EXPECTED_EVENTS = {
-    "project.initialized", "truth.activated", "project.migrated", "evidence.verified",
+    "project.initialized", "truth.activated", "project.migrated", "evidence.verified", "audit.checked",
     "extension.enabled", "extension.disabled",
     "decision.recorded", "decision.revoked", "observation.recorded", "environment.readback",
     "channel.sent", "channel.acknowledged", "channel.started", "audit.finding",
@@ -75,6 +75,7 @@ class ConvergenceTestCase(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.paths = operational_project(self.root, "convergence")
+        self.resource_probe = typed_command_evidence(self.paths, name="resource-probe", producer="probe")
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -284,7 +285,7 @@ class ResourceSubjectConvergenceTests(ConvergenceTestCase):
         self.create_authorized_work()
 
     def claim(self, lease_id: str) -> None:
-        event(self.paths, "resource.claimed", "file:shared", actor="dev", loop="execution", payload={"resource_id": "file:shared", "lease_id": lease_id, "work_id": "W-1", "expires_at": "2099-01-01T00:00:00Z"})
+        event(self.paths, "resource.claimed", "file:shared", actor="dev", loop="execution", evidence=[self.resource_probe], payload={"resource_id": "file:shared", "lease_id": lease_id, "work_id": "W-1", "expires_at": "2099-01-01T00:00:00Z"})
 
     def test_claim_release_and_recover_use_resource_subject_with_both_ids(self) -> None:
         self.claim("L-1")

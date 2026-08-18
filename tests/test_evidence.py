@@ -12,7 +12,7 @@ from pathlib import Path
 
 import voyage_skill.core as core
 
-from tests.support import operational_project, record_scoped_decision, reviewed_contracts
+from tests.support import operational_project, record_scoped_decision, reviewed_contracts, typed_command_evidence
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -303,7 +303,10 @@ class UserDecisionEvidenceTests(EvidenceTestCase):
 class DecisionRevocationIntegrationTests(EvidenceTestCase):
     def test_revoked_decision_cannot_authorize_strict_work(self) -> None:
         core.append_event(self.paths, actor="gov", loop="governance", event_type="work.created", subject="W-STRICT", risk="strict", payload={"title": "Strict", "scope": "test", "acceptance": ["safe"]})
-        core.append_event(self.paths, actor="user", loop="user", event_type="decision.recorded", subject="USER-STRICT", risk="strict", payload={"decision": "authorize"})
+        core.append_event(
+            self.paths, actor="user", loop="user", event_type="decision.recorded", subject="USER-STRICT", risk="strict",
+            payload={"decision": "authorize", "scope": {"actions": ["work.authorize"], "project_id": "evidence-example", "works": ["W-STRICT"]}},
+        )
         core.append_event(self.paths, actor="user", loop="user", event_type="decision.revoked", subject="USER-STRICT", risk="standard", payload={"reason": "withdrawn"})
         with self.assertRaisesRegex(core.VoyageError, "revoked"):
             core.append_event(self.paths, actor="gov", loop="governance", event_type="work.authorized", subject="W-STRICT", risk="standard", authorization="USER-STRICT")
@@ -328,11 +331,23 @@ class DecisionRevocationIntegrationTests(EvidenceTestCase):
 
         core.register_resource(self.paths, actor="gov", resource_id="file:strict", resource_type="file", mode="exclusive", risk="strict")
         core.append_event(self.paths, actor="gov", loop="governance", event_type="work.created", subject="W-RESOURCE", risk="strict", payload={"title": "Resource", "scope": "test", "acceptance": ["safe"], "required_resources": ["file:strict"]})
-        core.append_event(self.paths, actor="user", loop="user", event_type="decision.recorded", subject="USER-RESOURCE", risk="strict", payload={"decision": "authorize resource"})
+        core.append_event(
+            self.paths, actor="user", loop="user", event_type="decision.recorded", subject="USER-RESOURCE", risk="strict",
+            payload={
+                "decision": "authorize resource",
+                "scope": {
+                    "actions": ["work.authorize", "resource.claim"],
+                    "project_id": "evidence-example",
+                    "works": ["W-RESOURCE"],
+                    "resources": ["file:strict"],
+                },
+            },
+        )
         core.append_event(self.paths, actor="gov", loop="governance", event_type="work.authorized", subject="W-RESOURCE", risk="standard", authorization="USER-RESOURCE")
         core.append_event(self.paths, actor="user", loop="user", event_type="decision.revoked", subject="USER-RESOURCE", risk="standard", payload={"reason": "withdrawn"})
+        probe = typed_command_evidence(self.paths, name="revoked-resource-probe", producer="probe")
         with self.assertRaisesRegex(core.VoyageError, "revoked"):
-            core.append_event(self.paths, actor="dev", loop="execution", event_type="resource.claimed", subject="file:strict", risk="strict", payload={"resource_id": "file:strict", "lease_id": "lease-strict", "work_id": "W-RESOURCE", "expires_at": "2099-01-01T00:00:00Z"})
+            core.append_event(self.paths, actor="dev", loop="execution", event_type="resource.claimed", subject="file:strict", risk="strict", evidence=[probe], authorization="USER-RESOURCE", payload={"resource_id": "file:strict", "lease_id": "lease-strict", "work_id": "W-RESOURCE", "expires_at": "2099-01-01T00:00:00Z"})
 
 
 class EvidenceGateIntegrationTests(EvidenceTestCase):

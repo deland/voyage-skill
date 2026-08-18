@@ -69,6 +69,15 @@ participants from observed, and block only the reported scope.
 
 ## Load authoritative detail
 
+<!-- risk-loading:start -->
+For a risk classification, compression, high-impact action, resource probe, or
+gate task, run `voyage risk policy` and `voyage risk status <work>` first.
+Resolve active governance and system truth through the project registry, then
+read only the risk sections needed for that task. Never compress the immutable
+anchor, independent quality, append-only ledger, mandatory gates, loop
+separation, or User authority boundary.
+<!-- risk-loading:end -->
+
 <!-- extension-loading:start -->
 For an extension-related task, run `voyage extension status` first. Resolve the
 active system truth through the manifest and truth registry, then read only its

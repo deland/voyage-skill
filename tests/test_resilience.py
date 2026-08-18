@@ -20,6 +20,7 @@ from voyage_skill.core import (
     register_resource,
     validate_project,
 )
+from tests.support import typed_command_evidence
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -31,6 +32,7 @@ class DamagedInputTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.paths = initialize_project(self.root, "damaged-input")
+        self.resource_probe = typed_command_evidence(self.paths, name="damaged-resource-probe", producer="probe")
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -71,6 +73,7 @@ class DamagedInputTests(unittest.TestCase):
             event_type="resource.claimed",
             subject="file:shared",
             risk="standard",
+            evidence=[self.resource_probe],
             payload={"resource_id": "file:shared", "lease_id": "lease-1", "work_id": "W-1", "expires_at": expires_at},
         )
 

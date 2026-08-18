@@ -15,7 +15,19 @@
           "id": {"type": "string", "minLength": 1},
           "mandatory": {"type": "boolean"},
           "allow_skips": {"type": "boolean"},
-          "required_loop": {"enum": ["quality"]}
+          "required_loop": {"enum": ["quality"]},
+          "risk_modes": {
+            "type": "array",
+            "items": {"enum": ["light", "standard", "strict"]},
+            "uniqueItems": true
+          },
+          "risk_domains": {
+            "type": "array",
+            "items": {
+              "enum": ["credentials", "gate-relaxation", "irreversible", "material-cost", "permissions", "persistent-data", "production", "public-external-write", "security"]
+            },
+            "uniqueItems": true
+          }
         },
         "additionalProperties": false
       }

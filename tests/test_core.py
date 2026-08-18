@@ -152,7 +152,10 @@ class VoyageCoreTests(unittest.TestCase):
             self.event("work.authorized", "W-1", actor="gov", loop="governance")
         with self.assertRaisesRegex(VoyageError, "recorded User decision"):
             self.event("work.authorized", "W-1", actor="gov", loop="governance", authorization="USER-1")
-        self.event("decision.recorded", "USER-1", actor="user", loop="user", risk="strict", payload={"decision": "authorize W-1"})
+        self.event(
+            "decision.recorded", "USER-1", actor="user", loop="user", risk="strict",
+            payload={"decision": "authorize W-1", "scope": {"actions": ["work.authorize"], "project_id": "example", "works": ["W-1"]}},
+        )
         self.event("work.authorized", "W-1", actor="gov", loop="governance", authorization="USER-1")
         self.assertEqual(current_state(self.paths)["works"]["W-1"]["status"], "authorized")
 
@@ -184,6 +187,7 @@ class VoyageCoreTests(unittest.TestCase):
             "file:shared",
             actor="dev",
             loop="execution",
+            evidence=[self.execution_evidence],
             payload={"resource_id": "file:shared", "lease_id": "lease-1", "work_id": "W-1", "expires_at": "2099-01-01T00:00:00Z"},
         )
         self.event("work.started", "W-1", actor="dev", loop="execution")
@@ -194,6 +198,7 @@ class VoyageCoreTests(unittest.TestCase):
                 "file:shared",
                 actor="dev-2",
                 loop="execution",
+                evidence=[self.execution_evidence],
                 payload={"resource_id": "file:shared", "lease_id": "lease-2", "work_id": "W-2", "expires_at": "2099-01-01T00:00:00Z"},
             )
 
@@ -206,7 +211,7 @@ class VoyageCoreTests(unittest.TestCase):
             },
         )
         self.create_work(resources=["account:test"])
-        with self.assertRaisesRegex(VoyageError, "fresh probe evidence"):
+        with self.assertRaisesRegex(VoyageError, "probe evidence"):
             self.event(
                 "resource.claimed",
                 "account:test",

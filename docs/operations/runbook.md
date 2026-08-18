@@ -44,6 +44,7 @@ change.
 <!-- voyage-cli-reference:start -->
 | Command |
 | --- |
+| `voyage audit check` |
 | `voyage event record` |
 | `voyage evidence record` |
 | `voyage evidence show` |
@@ -60,6 +61,8 @@ change.
 | `voyage resource recover` |
 | `voyage resource register` |
 | `voyage resource release` |
+| `voyage risk policy` |
+| `voyage risk status` |
 | `voyage rule apply` |
 | `voyage rule approve` |
 | `voyage rule propose` |
@@ -149,6 +152,29 @@ enabled. Projects created before the explicit marker report
 `legacy-compatible`: replay their old extension events without inventing enable
 history, then require the explicit lifecycle for future governed adoption.
 <!-- extension-operations:end -->
+
+## Risk policy operations
+
+<!-- risk-operations:start -->
+Read the versioned matrix with `voyage risk policy` and inspect one derived work
+assessment with `voyage risk status <work>`. Supply classification evidence and
+the relevant domain, unknown/disputed, and environment-change flags when
+creating work; the ledger stores the canonical `risk_assessment` and escalation
+reasons.
+
+For Strict work, record separate User decisions scoped to the exact project,
+work, and actions `work.authorize` and `work.start`. Attach a fresh
+`runtime-readback` to start. Before `resource.claim`, retain a valid typed probe
+and cite a decision also scoped to the exact resource. After delivery and
+independent quality, record `voyage audit check` (`audit.checked`) on the current immutable anchor
+and attach a separate fresh post-action readback to acceptance.
+
+Light probes conflict-prone resources; Standard probes every declared resource;
+Strict adds the exact decision and retains the pre-action readback. An
+environment change requires a post-action readback in every mode. Failed policy
+checks append nothing. The legacy work without the version-1 marker continues its
+historical replay path and must not be rewritten to fabricate evidence.
+<!-- risk-operations:end -->
 
 ## Typed evidence protocol
 

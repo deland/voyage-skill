@@ -1466,3 +1466,159 @@ active → retired | superseded
 - Readback: anchor contains 10 changed files with 976 insertions and 24 deletions, including the 432-line extension suite; HEAD exactly matched the anchor and the worktree was clean before this CLOSE append
 - Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned frontmatter, metadata, identity, schema, invocation, dogfood, CLI, replay, extension, recovery, and append-only contract checks pass
 - Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head contains both the implementation anchor and CLOSE commit, then begin MK-202 with a new test-first START record
+
+---
+
+## 2026-08-18 · DEV-0007 · MK-202 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `2e9a59b9cec2a3654a61d7b3c373068bdce1ea09`
+- Anchor: pending
+- Supersedes: none
+- Scope: turn light/standard/strict from descriptive labels into a versioned work-scoped policy; persist automatic escalation reasons; enforce mode-specific gate, audit, runtime-readback, User-decision, and resource-probe controls; expose policy and work status through CLI and recovery
+- Non-goals: no probabilistic risk scorer, remote policy service, identity authentication, background audit scheduler, automatic deployment, arbitrary probe plugin, quota billing, gate waiver, or weakening of the permanent kernel
+- Risk: strict; incorrect compression could authorize high-risk execution without User authority or silently omit a slow-loop mandatory gate
+- Dependencies: MK-201 complete and remote branch verified at the baseline above; MK-102 typed evidence and MK-104 classified recovery provide the evidence/readback substrate
+- Acceptance gates: every ST-2021 through ST-2026 test below is added before product implementation and observed failing for the documented gap; every subtask passes its focused tests before the next begins; final full regression, compileall, dogfood validate/truth/recover/risk status, CLI reference, schema/runtime/replay convergence, append-only planning, legacy replay, and diff hygiene pass
+- Actual result: pending
+- Tests: ST-2021 through ST-2026 defined below
+- Readback: runtime currently stores the declared work risk and only checks a generic decision for strict authorization plus stateful-resource evidence; Light and Standard follow the same gates, Strict has no scoped execution decision, pre/post readback, or audit checkpoint, and no policy/status command exists
+- Remaining issues: risk classification evidence, escalation provenance, risk-domain gates, claim probe retention, strict checkpoints, CLI/recovery visibility, and active-document convergence are absent
+- Next safe action: add the complete MK-202 suite without product edits, capture the red baseline, then implement ST-2021 only
+
+### DEV-0007 固定风险策略决策
+
+1. Risk policy version 1 is work-scoped. A new `work.created` event records requested mode, effective mode, domains, environment-change flag, escalation reasons, and policy version; older ledgers without this marker replay with their historical behavior.
+2. Mode order is `light < standard < strict` and an effective mode never becomes lower than the requested mode or any required resource risk.
+3. Light compression requires at least one currently valid typed classification evidence reference. Missing classification evidence upgrades Light to Standard; invalid evidence cannot justify compression.
+4. Unknown or disputed classification, any strict resource, or the domains production, persistent-data, security, credentials, permissions, material-cost, public-external-write, gate-relaxation, and irreversible upgrade the work to Strict.
+5. Immutable delivery anchors, independent final quality, append-only ledger integrity, truth-defined mandatory gates, loop separation, and User authority boundaries remain required in every mode.
+6. Optional gate definitions may name `risk_modes` and `risk_domains`. Mandatory gates always apply; mode gates apply to their named effective mode; domain gates apply to matching Strict work. Compression never removes a mandatory gate.
+7. Strict authorization is action-scoped. `work.authorize`, `work.start`, and `resource.claim` reference a non-revoked User decision covering the exact project, work, action, and, for claims, resource. The reference is recorded on each strict action.
+8. Strict start requires a fresh valid `runtime-readback` evidence reference. Strict acceptance requires a separate fresh post-action readback and an independent `audit.checked` event on the current immutable delivery anchor.
+9. Light and Standard require a fresh post-action runtime readback when the work declares an environment change. They do not acquire Strict pre-action or audit checkpoints merely because an environment changed.
+10. Resource claim probes are typed and retained on the lease. Light requires them for conflict-prone resources; Standard requires them for every declared resource; Strict requires them for every declared resource plus the exact User decision above.
+11. `audit.checked` belongs to the permanent audit loop, not `advanced-audit`; it is a scoped checkpoint result, not a finding, scheduler, appeal, or project-wide block.
+12. `voyage risk policy`, `voyage risk status <work>`, recovery, active truth, and the generated CLI reference expose the same deterministic contract and escalation provenance.
+
+### ST-2021 · 策略目录、分类与自动升级
+
+实现前测试用例：
+
+1. `risk_policy_matrix_has_three_ordered_modes_and_kernel_invariants`：三种模式、顺序和不可压缩内核控制精确且可序列化。
+2. `light_with_valid_typed_classification_evidence_remains_light`：有效类型化分类证据允许低风险工作保持 Light。
+3. `light_without_valid_classification_evidence_escalates_to_standard`：无证据或 legacy 字符串不能支撑 Light，事件和派生状态记录升级原因。
+4. `unknown_disputed_or_strict_domain_escalates_to_strict`：unknown、disputed 和每个高风险域分别自动选择 Strict。
+5. `resource_risk_and_requested_mode_are_monotonic`：资源风险和请求模式只允许维持或上调，不能降级。
+6. `risk_assessment_is_canonical_in_event_state_status_and_recovery`：同一版本化 assessment 在账本、state、status、recover 中一致。
+
+### ST-2022 · 不可压缩门禁与风险域门禁
+
+实现前测试用例：
+
+1. `all_modes_keep_immutable_anchor_and_independent_quality`：Light/Standard/Strict 均不能绕过交付锚点和独立质量。
+2. `mandatory_gate_applies_to_every_mode`：项目 mandatory gate 对三个模式均生效，Light 不构成 waiver。
+3. `mode_gate_applies_only_to_named_modes`：非 mandatory 的 `risk_modes` gate 只约束声明的 Standard/Strict 模式。
+4. `strict_domain_gate_applies_only_to_matching_domain`：Strict 风险域完整集只要求与工作 domain 匹配的 gate。
+5. `gate_policy_fields_are_schema_and_runtime_validated`：risk_modes/risk_domains 类型、枚举和重复值均被 schema/runtime 一致检查。
+
+### ST-2023 · Strict User 决策与前后真实读回
+
+实现前测试用例：
+
+1. `strict_authorize_requires_exact_user_decision_scope`：缺失、非 User、撤销、错误 project/work/action 均拒绝且不追加事件。
+2. `strict_start_requires_separate_exact_action_decision`：authorize 决策不能自动替代 start 决策，start 引用被持久化。
+3. `strict_start_rejects_missing_invalid_expired_or_wrong_kind_readback`：缺失、无效、过期或非 runtime-readback 均不能执行。
+4. `strict_start_accepts_fresh_runtime_readback`：精确决策与新鲜 pre-action 读回共同满足后进入 active。
+5. `strict_accept_requires_fresh_post_action_readback`：pre-action 读回不能冒充 post-action，过期或缺失读回阻止验收。
+6. `environment_change_requires_post_readback_in_light_and_standard`：环境变更时 Light/Standard 也需新鲜 post-action 读回，普通工作不额外要求。
+
+### ST-2024 · 资源探测与 Strict 审计检查点
+
+实现前测试用例：
+
+1. `light_probes_conflict_resources_but_not_rebuildable_nonconflict_resources`：Light 只为冲突资源承担探测成本。
+2. `standard_claim_requires_valid_typed_probe_for_every_resource`：Standard 每个声明资源领取前均需有效 command-result 或 runtime-readback。
+3. `strict_claim_requires_probe_and_exact_user_scope`：Strict 同时要求探测证据与精确 project/work/resource/action 决策。
+4. `lease_retains_probe_evidence_and_recovery_exposes_it`：领取事件、lease state 和恢复输出保留探测引用。
+5. `strict_accept_requires_independent_audit_checkpoint_on_current_anchor`：缺 checkpoint、自审、旧 anchor 或无类型化证据均拒绝；Light/Standard 不被强制。
+
+### ST-2025 · CLI、事件、恢复与原子性
+
+实现前测试用例：
+
+1. `risk_cli_policy_and_status_emit_stable_json`：policy/status 输出模式、控制、assessment、原因和下一安全动作。
+2. `work_cli_risk_inputs_drive_automatic_escalation`：risk-domain、unknown、disputed、environment-change 和 evidence 参数进入规范 assessment。
+3. `strict_cli_round_trip_enforces_authorize_start_claim_audit_accept`：CLI 完成精确决策、资源探测、pre-readback、audit checkpoint 和 post-readback 链。
+4. `audit_checked_matches_runtime_schema_cli_and_replay_sets`：新事件在 runtime、schema、CLI exchange 和 replay 覆盖集合精确一致。
+5. `failed_policy_transition_is_atomic`：任何策略门禁失败均不改变 ledger bytes 或 head。
+6. `recovery_reports_effective_risk_requirements_and_probe_refs`：跨会话恢复无需记忆即可看见 effective mode、升级原因、缺口和 lease probe。
+
+### ST-2026 · Active 文档、Skill、legacy 与 dogfood
+
+实现前测试用例：
+
+1. `authority_documents_exact_executable_policy_matrix`：active governance truth 的模式矩阵与 runtime 常量一致。
+2. `system_and_runbook_document_assessment_scopes_and_checkpoints`：active system/operations truth 描述版本化 assessment、精确 decision scope、读回、探测、audit checkpoint 和 legacy 边界。
+3. `skill_preserves_kernel_and_loads_risk_detail_progressively`：Skill 保留不可压缩项，并只在风险任务加载 active governance/system 细节。
+4. `cli_reference_contains_risk_and_audit_leaf_commands`：派生 reference 精确包含 risk policy/status 与 audit check。
+5. `legacy_work_without_policy_marker_replays_historical_behavior`：旧工作事件不被追溯强加新 scope/readback/checkpoint。
+6. `dogfood_project_remains_valid_recoverable_and_policy_visible`：仓库自身 valid/recoverable，旧账本不伪造 assessment，policy contract 可见。
+
+---
+
+## 2026-08-18 · DEV-0007 · MK-202 · UPDATE
+
+- Status: in-progress; red baseline captured
+- Baseline: `2e9a59b9cec2a3654a61d7b3c373068bdce1ea09`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 34 ST-2021 through ST-2026 test methods added before product implementation
+- Non-goals: unchanged
+- Risk: strict
+- Dependencies: DEV-0007 START matrix and fixed risk-policy decisions
+- Acceptance gates: the suite must expose absent policy constants/status, non-executable mode differences, missing automatic escalation, permissive strict authorization/readback/resource transitions, absent audit checkpoint, missing schema/CLI/recovery convergence, and absent active-document markers before implementation
+- Actual result: expected FAIL; 34 tests ran with 32 assertion failures and 13 errors including subtests; only existing immutable-anchor/independent-quality enforcement, failed-transition atomicity, and historical legacy behavior passed
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-skill-pycache python3 -B -m unittest tests.test_risk_policy -v`
+- Readback: failures map to the planned gaps; missing runtime constants/APIs, unchanged declared risk, permissive gates/claims/strict starts, unsupported `audit.checked`, absent CLI arguments/commands, missing recovery fields, schema rejection of policy gate fields, and missing Skill/active-truth markers are all directly visible
+- Remaining issues: all ST-2021 through ST-2026 implementation work remains
+- Next safe action: implement ST-2021 versioned policy constants, work assessment normalization, monotonic escalation, status, and recovery projection; run RiskAssessmentTests before ST-2022
+
+---
+
+## 2026-08-18 · DEV-0007 · MK-202 · UPDATE
+
+- Status: in-progress; supplementary review tests captured red
+- Baseline: `2e9a59b9cec2a3654a61d7b3c373068bdce1ea09`
+- Anchor: pending
+- Supersedes: none
+- Scope: add explicit missing-control status and cold-start semantic revalidation of policy evidence at the original action time
+- Non-goals: unchanged
+- Risk: strict
+- Dependencies: primary 34-test suite green and first 253-test full regression green after fixture migration
+- Acceptance gates: status must name missing Strict controls; a hash-consistent ledger that substitutes valid command evidence for a required runtime readback must fail validation
+- Actual result: expected FAIL; 2 tests ran with one missing-field error and one assertion failure because validation returned no semantic policy error
+- Tests: `tests.test_risk_policy.RiskCliRecoveryTests.test_risk_status_names_missing_strict_controls` and `test_validate_rechecks_policy_evidence_kind_at_action_time`
+- Readback: append-time enforcement is correct, but the derived status is not sufficiently explicit and cold validation currently checks document integrity without rechecking the action-specific evidence kind
+- Remaining issues: implement deterministic gaps and event-time semantic evidence validation, then rerun the focused, MK-202, and full suites
+- Next safe action: add read-only missing-control derivation and policy evidence validation without changing transition permissions
+
+---
+
+## 2026-08-18 · DEV-0007 · MK-202 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `2e9a59b9cec2a3654a61d7b3c373068bdce1ea09`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-2021 through ST-2026 implemented; risk policy version 1 now persists requested/effective modes and escalation provenance, selects mandatory/mode/domain gates, enforces exact Strict User scopes, pre/post runtime readbacks, typed resource probes, retained lease evidence, and current-anchor audit checkpoints, and exposes deterministic policy/status/recovery/CLI contracts
+- Non-goals: unchanged; no probabilistic scorer, remote policy service, authentication system, background scheduler, arbitrary probe plugin, quota billing, gate waiver, deployment automation, or weakening of the permanent kernel was introduced
+- Risk: strict; accepted before commit only after cold validation, append-time enforcement, immutable-anchor/independent-quality invariants, exact decision scopes, audit-evidence revalidation, atomic failures, and legacy replay were exercised
+- Dependencies: MK-101 through MK-201, DEV-0007 fixed decisions, complete pre-implementation matrix, primary red baseline, and supplementary review red cases satisfied
+- Acceptance gates: focused risk suite, full regression, compilation, dogfood validate/truth/recover/risk policy, generated CLI reference, runtime/schema/replay convergence, append-only planning, legacy compatibility, Skill metadata validation, and diff hygiene
+- Actual result: PASS before commit; 39 risk-policy tests passed and the complete 258-test suite passed with 0 failures, 0 errors, and 0 skips; compileall passed; dogfood validate returned no errors; truth remained operational with six activation-verified active sources and no missing domains; recovery reported zero work, zero unknown/conflicts, six declared legacy facts, and risk policy version 1; `risk policy` returned the ordered Light/Standard/Strict matrix and nine Strict domains; CLI reference and `git diff --check` passed
+- Tests: the original 34 tests were written before product implementation and produced 32 assertion failures plus 13 errors including subtests; five supplementary review tests also demonstrated red before their fixes: missing-control status was absent, command evidence could impersonate historical runtime readback, a Light creation could lose classification evidence without cold-validation error, invalid work risk leaked `ValueError`, and tampered current audit-checkpoint evidence did not block Strict acceptance; all 39 now pass
+- Readback: Light without valid typed classification evidence upgrades to Standard; unknown/disputed, Strict resources, and all nine fixed domains upgrade to Strict; all modes keep immutable anchors, independent quality, ledger integrity, mandatory gates, and authority separation; Strict authorize/start/claim decisions are exact and non-revoked; start/accept readbacks and resource probes are semantically rechecked at original action time; acceptance revalidates current audit evidence; failed policy actions append nothing; legacy work without the policy marker retains historical behavior
+- Fixture migration: existing tests that create version-1 Standard work now provide real typed resource probes, and Strict fixtures provide exact scoped User decisions; recovery fixtures retain a valid typed probe while still testing live unknown/conflict classification, so compatibility was not obtained by weakening the new controls
+- Remaining issues: the official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; the repository-owned metadata test and a dependency-free equivalent frontmatter validator pass, `SKILL.md` remains 96 lines, and all runtime/schema/invocation/dogfood checks pass; immutable implementation anchor is still pending
+- Next safe action: commit the MK-202 implementation, rerun all 258 tests and acceptance gates against the immutable commit, append DEV-0007 CLOSE with its SHA, then commit and push the close record before MK-301

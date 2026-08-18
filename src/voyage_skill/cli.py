@@ -28,6 +28,8 @@ from .core import (
     recovery_snapshot,
     record_evidence,
     record_evidence_verification,
+    risk_policy_view,
+    risk_status,
     SUPPORTED_EVENT_TYPES,
     truth_status,
     validate_project,
@@ -101,6 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser.add_argument("--decision", required=True, help=f"Recorded User decision covering extension.{action}")
         common_actor(action_parser, loop="governance")
 
+    risk = sub.add_parser("risk", help="Inspect executable risk policy and work requirements")
+    risk_sub = risk.add_subparsers(dest="risk_command", required=True)
+    risk_sub.add_parser("policy", help="Show the versioned light, standard, and strict policy")
+    risk_status_parser = risk_sub.add_parser("status", help="Show effective risk and requirements for one work item")
+    risk_status_parser.add_argument("work_id")
+
     work = sub.add_parser("work", help="Operate work items")
     work_sub = work.add_subparsers(dest="work_command", required=True)
 
@@ -113,6 +121,11 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--dependency", action="append", default=[])
     create.add_argument("--resource", action="append", default=[])
     create.add_argument("--risk", choices=["light", "standard", "strict"], default="standard")
+    create.add_argument("--risk-domain", action="append", default=[])
+    create.add_argument("--risk-unknown", action="store_true")
+    create.add_argument("--risk-disputed", action="store_true")
+    create.add_argument("--environment-change", action="store_true")
+    common_evidence(create)
     common_actor(create, loop="governance")
 
     authorize = work_sub.add_parser("authorize")
@@ -122,6 +135,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     start = work_sub.add_parser("start")
     start.add_argument("work_id")
+    start.add_argument("--authorization", help="Exact work.start User decision for strict work")
+    common_evidence(start)
     common_actor(start, loop="execution")
 
     deliver = work_sub.add_parser("deliver")
@@ -144,6 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     accept = work_sub.add_parser("accept")
     accept.add_argument("work_id")
+    common_evidence(accept)
     common_actor(accept, loop="governance")
 
     close = work_sub.add_parser("close")
@@ -204,6 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
     claim.add_argument("--work", required=True)
     claim.add_argument("--lease-id")
     claim.add_argument("--ttl-minutes", type=int, default=60)
+    claim.add_argument("--authorization", help="Exact resource.claim User decision for strict work")
     common_evidence(claim)
     common_actor(claim, loop="execution")
     for name in ("release", "recover"):
@@ -212,6 +229,14 @@ def build_parser() -> argparse.ArgumentParser:
         common_evidence(item)
         common_actor(item)
     resource_sub.add_parser("list")
+
+    audit = sub.add_parser("audit", help="Record permanent-kernel audit checkpoints")
+    audit_sub = audit.add_subparsers(dest="audit_command", required=True)
+    audit_check = audit_sub.add_parser("check", help="Check one immutable delivery anchor")
+    audit_check.add_argument("work_id")
+    audit_check.add_argument("--anchor", required=True)
+    common_evidence(audit_check)
+    common_actor(audit_check, loop="audit")
 
     rule = sub.add_parser("rule", help="Operate the rule lifecycle")
     rule_sub = rule.add_subparsers(dest="rule_command", required=True)
@@ -310,12 +335,22 @@ def handle_work(paths, args) -> None:
                 "non_goals": args.non_goal,
                 "dependencies": args.dependency,
                 "required_resources": args.resource,
+                "risk_assessment": {
+                    "version": 1,
+                    "domains": args.risk_domain,
+                    "unknown": args.risk_unknown,
+                    "disputed": args.risk_disputed,
+                    "environment_change": args.environment_change,
+                },
             },
         )
     elif command == "authorize":
         append_from_args(paths, args, event_type="work.authorized", subject=args.work_id, authorization=args.authorization)
     elif command == "start":
-        append_from_args(paths, args, event_type="work.started", subject=args.work_id)
+        append_from_args(
+            paths, args, event_type="work.started", subject=args.work_id,
+            authorization=args.authorization,
+        )
     elif command == "deliver":
         append_from_args(paths, args, event_type="work.delivered", subject=args.work_id, anchor=args.anchor)
     elif command == "quality":
@@ -399,6 +434,7 @@ def handle_resource(paths, args) -> None:
                 "work_id": args.work,
                 "expires_at": new_lease_expiry(args.ttl_minutes),
             },
+            authorization=args.authorization,
         )
     elif args.resource_command in {"release", "recover"}:
         lease = current_state(paths)["leases"].get(args.lease_id)
@@ -490,6 +526,13 @@ def handle_extension(paths, args) -> None:
         emit({"extension": args.extension_id, "version": args.version, "status": "disabled", "event": event["event_id"]})
 
 
+def handle_risk(paths, args) -> None:
+    if args.risk_command == "policy":
+        emit(risk_policy_view())
+    elif args.risk_command == "status":
+        emit(risk_status(paths, args.work_id))
+
+
 def run(args: argparse.Namespace) -> int:
     if args.command == "init":
         paths = initialize_project(args.root, args.project_id, args.truth_registry)
@@ -525,6 +568,8 @@ def run(args: argparse.Namespace) -> int:
         handle_truth(paths, args)
     elif args.command == "extension":
         handle_extension(paths, args)
+    elif args.command == "risk":
+        handle_risk(paths, args)
     elif args.command == "gate":
         append_from_args(
             paths, args, event_type="gate.recorded", subject=args.work,
@@ -536,6 +581,15 @@ def run(args: argparse.Namespace) -> int:
         )
     elif args.command == "resource":
         handle_resource(paths, args)
+    elif args.command == "audit":
+        append_from_args(
+            paths,
+            args,
+            event_type="audit.checked",
+            subject=args.work_id,
+            payload={"counts": {"total": 1, "passed": 1, "failed": 0, "skipped": 0, "unknown": 0}},
+            anchor=args.anchor,
+        )
     elif args.command == "rule":
         handle_rule(paths, args)
     elif args.command == "event":

@@ -19,7 +19,47 @@ from typing import Any, Iterator
 
 SCHEMA_VERSION = "0.1.0"
 LOOPS = {"execution", "quality", "governance", "audit", "user", "system"}
-RISK_LEVELS = {"light", "standard", "strict"}
+RISK_MODE_ORDER = ("light", "standard", "strict")
+RISK_LEVELS = set(RISK_MODE_ORDER)
+RISK_POLICY_VERSION = 1
+STRICT_RISK_DOMAINS = (
+    "credentials", "gate-relaxation", "irreversible", "material-cost",
+    "permissions", "persistent-data", "production", "public-external-write",
+    "security",
+)
+RISK_POLICIES = {
+    "light": {
+        "immutable_anchor": True,
+        "independent_quality": True,
+        "append_only_ledger": True,
+        "extra_gates": "mandatory-core-minimum",
+        "audit": "event-triggered",
+        "runtime_readback": "after-environment-change",
+        "user_authorization": "on-escalation-to-strict",
+        "resource_probe": "conflict-prone-resources",
+    },
+    "standard": {
+        "immutable_anchor": True,
+        "independent_quality": True,
+        "append_only_ledger": True,
+        "extra_gates": "project-defined-mode-gates",
+        "audit": "periodic-or-event-triggered",
+        "runtime_readback": "after-environment-change",
+        "user_authorization": "on-escalation-to-strict",
+        "resource_probe": "all-declared-resources",
+    },
+    "strict": {
+        "immutable_anchor": True,
+        "independent_quality": True,
+        "append_only_ledger": True,
+        "extra_gates": "matching-risk-domain-full-set",
+        "audit": "mandatory-current-anchor-checkpoint",
+        "runtime_readback": "fresh-before-and-after-action",
+        "user_authorization": "each-strict-execution-action",
+        "resource_probe": "fresh-before-action-and-retained",
+    },
+}
+PROBE_EVIDENCE_KINDS = {"command-result", "runtime-readback"}
 STATEFUL_RESOURCE_TYPES = {"account", "environment", "session", "window", "quota"}
 ALLOWED_RESOURCE_TYPES = {"file", "account", "port", "environment", "session", "window", "quota"}
 ALLOWED_RESOURCE_MODES = {"exclusive", "shared-read", "serialized", "rebuildable"}
@@ -75,7 +115,7 @@ RULE_DURABLE_STATES = ("proposed", "approved", "applied", "active", "retired", "
 SUPPORTED_EVENT_TYPES = frozenset({
     "project.initialized", "truth.activated", "project.migrated", "evidence.verified",
     "extension.enabled", "extension.disabled",
-    "decision.recorded", "decision.revoked", "observation.recorded", "environment.readback",
+    "decision.recorded", "decision.revoked", "observation.recorded", "environment.readback", "audit.checked",
     "channel.sent", "channel.acknowledged", "channel.started", "audit.finding",
     "work.created", "work.authorized", "work.started", "work.delivered",
     "quality.passed", "quality.rejected", "gate.recorded", "work.accepted", "work.closed",
@@ -154,6 +194,15 @@ def extension_catalog_view() -> dict[str, dict[str, Any]]:
             for key, value in contract.items()
         }
         for extension_id, contract in EXTENSION_CATALOG.items()
+    }
+
+
+def risk_policy_view() -> dict[str, Any]:
+    return {
+        "version": RISK_POLICY_VERSION,
+        "order": list(RISK_MODE_ORDER),
+        "strict_domains": list(STRICT_RISK_DOMAINS),
+        "modes": {mode: deepcopy(RISK_POLICIES[mode]) for mode in RISK_MODE_ORDER},
     }
 
 
@@ -838,6 +887,18 @@ def _validate_gate_definition_data(gates: dict[str, Any]) -> list[str]:
             seen.add(gate_id)
         if definition.get("required_loop") != "quality":
             errors.append(f"{path}.required_loop: value is not in enum ['quality']")
+        for field, allowed in (("risk_modes", set(RISK_MODE_ORDER)), ("risk_domains", set(STRICT_RISK_DOMAINS))):
+            if field not in definition:
+                continue
+            values = definition[field]
+            if not isinstance(values, list):
+                errors.append(f"{path}.{field}: must be an array")
+                continue
+            if len(values) != len(set(values)):
+                errors.append(f"{path}.{field}: uniqueItems contains duplicates")
+            invalid = [value for value in values if not isinstance(value, str) or value not in allowed]
+            if invalid:
+                errors.append(f"{path}.{field}: values are not in enum {invalid!r}")
     return errors
 
 
@@ -961,11 +1022,53 @@ def _require_extension_decision_scope(
     return decision
 
 
+def _require_work_action_decision_scope(
+    state: dict[str, Any],
+    decision_id: Any,
+    *,
+    action: str,
+    work_id: str,
+    resource_id: str | None = None,
+) -> dict[str, Any]:
+    decision = state["decisions"].get(decision_id)
+    _require(decision is not None, f"strict {action} requires a recorded User decision")
+    _require(not decision.get("revoked"), f"strict {action} decision is revoked")
+    _require(decision.get("loop") == "user", f"strict {action} requires User-loop authority")
+    scope = decision.get("payload", {}).get("scope")
+    _require(isinstance(scope, dict), f"strict {action} decision requires object scope")
+    actions = scope.get("actions")
+    _require(isinstance(actions, list) and action in actions, f"User decision does not cover action {action}")
+    _require(scope.get("project_id") == state["project_id"], "User decision does not cover this project")
+    works = scope.get("works")
+    _require(isinstance(works, list) and work_id in works, "User decision does not cover this work")
+    if resource_id is not None:
+        resources = scope.get("resources")
+        _require(isinstance(resources, list) and resource_id in resources, "User decision does not cover this resource")
+    return decision
+
+
 def _work(state: dict[str, Any], work_id: str) -> dict[str, Any]:
     work = state["works"].get(work_id)
     if work is None:
         raise VoyageError(f"unknown work item: {work_id}")
     return work
+
+
+def _required_gate_definitions(work: dict[str, Any], gate_defs: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    domains = set((work.get("risk_assessment") or {}).get("domains", []))
+    required: dict[str, dict[str, Any]] = {}
+    for gate_id, definition in gate_defs.items():
+        if definition.get("mandatory") is True:
+            required[gate_id] = definition
+            continue
+        modes = definition.get("risk_modes", [])
+        if isinstance(modes, list) and work["risk"] in modes:
+            required[gate_id] = definition
+            continue
+        risk_domains = definition.get("risk_domains", [])
+        if work["risk"] == "strict" and isinstance(risk_domains, list) and domains.intersection(risk_domains):
+            required[gate_id] = definition
+    return required
 
 
 def _gate_definitions(gates: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1184,6 +1287,14 @@ def replay_events(
             _require(not dangling, f"work has unknown internal dependencies: {', '.join(dangling)}")
             unknown_resources = set(payload.get("required_resources", [])) - set(resource_defs)
             _require(not unknown_resources, f"work requires unknown resources: {', '.join(sorted(unknown_resources))}")
+            assessment = payload.get("risk_assessment")
+            if assessment is not None:
+                _require(isinstance(assessment, dict), "risk_assessment must be an object")
+                _require(assessment.get("version") == RISK_POLICY_VERSION, "work risk policy version mismatch")
+                _require(assessment.get("requested") in RISK_LEVELS, "work requested risk is invalid")
+                _require(assessment.get("effective") == event["risk"], "work effective risk must match event risk")
+                _require(isinstance(assessment.get("domains"), list), "work risk domains must be an array")
+                _require(isinstance(assessment.get("reasons"), list), "work risk reasons must be an array")
             state["works"][subject] = {
                 "id": subject,
                 "title": payload["title"],
@@ -1192,10 +1303,14 @@ def replay_events(
                 "non_goals": payload.get("non_goals", []),
                 "dependencies": dependencies,
                 "required_resources": payload.get("required_resources", []),
+                "declared_risk": assessment.get("requested") if assessment else event["risk"],
                 "risk": event["risk"],
+                "risk_policy_version": assessment.get("version") if assessment else None,
+                "risk_assessment": deepcopy(assessment) if assessment else None,
                 "status": "draft",
                 "delivery": None,
                 "quality_actor": None,
+                "audit_checkpoint": None,
                 "previous_status": None,
             }
 
@@ -1206,9 +1321,14 @@ def replay_events(
             _require(work["status"] == "draft", f"work {subject} is not draft")
             if work["risk"] == "strict":
                 _require(bool(event.get("authorization")), "strict work requires User authorization")
-                decision = state["decisions"].get(event["authorization"])
-                _require(decision is not None, "strict work authorization must reference a recorded User decision")
-                _require(not decision.get("revoked"), "strict work authorization references a revoked User decision")
+                if work.get("risk_policy_version") == RISK_POLICY_VERSION:
+                    _require_work_action_decision_scope(
+                        state, event.get("authorization"), action="work.authorize", work_id=subject,
+                    )
+                else:
+                    decision = state["decisions"].get(event["authorization"])
+                    _require(decision is not None, "strict work authorization must reference a recorded User decision")
+                    _require(not decision.get("revoked"), "strict work authorization references a revoked User decision")
             work["authorization"] = event.get("authorization")
             work["status"] = "authorized"
 
@@ -1216,6 +1336,11 @@ def replay_events(
             _require(loop == "execution", "work start requires execution loop")
             work = _work(state, subject)
             _require(work["status"] in {"authorized", "rejected"}, f"work {subject} cannot start from {work['status']}")
+            if work.get("risk_policy_version") == RISK_POLICY_VERSION and work["risk"] == "strict":
+                _require_work_action_decision_scope(
+                    state, event.get("authorization"), action="work.start", work_id=subject,
+                )
+                _require(bool(evidence), "strict work start requires fresh runtime readback evidence")
             held_resources = {
                 lease["resource_id"]
                 for lease in state["leases"].values()
@@ -1225,6 +1350,9 @@ def replay_events(
             _require(not missing_resources, f"work {subject} has unclaimed resources: {', '.join(sorted(missing_resources))}")
             work["status"] = "active"
             work["executor"] = actor
+            if work.get("risk_policy_version") == RISK_POLICY_VERSION and work["risk"] == "strict":
+                work["start_authorization"] = event.get("authorization")
+                work["pre_readback"] = evidence[0]
 
         elif event_type == "work.delivered":
             _require(loop == "execution", "delivery requires execution loop")
@@ -1242,6 +1370,7 @@ def replay_events(
             attempt = 1 + (work["delivery"]["attempt"] if work["delivery"] else 0)
             work["delivery"] = {"anchor": anchor, "evidence": list(evidence), "actor": actor, "attempt": attempt, "event_id": event["event_id"]}
             work["quality_actor"] = None
+            work["audit_checkpoint"] = None
             work["status"] = "delivered"
             state["gates"].setdefault(subject, {}).pop("independent-quality", None)
 
@@ -1275,6 +1404,27 @@ def replay_events(
             }
             work["status"] = "quality-passed" if verdict == "pass" else "rejected"
 
+        elif event_type == "audit.checked":
+            _require(loop == "audit", "audit checkpoint requires audit loop")
+            work = _work(state, subject)
+            _require(work["status"] in {"delivered", "quality-passed"}, f"work {subject} is not ready for audit checkpoint")
+            _require(work.get("delivery") is not None, "audit checkpoint requires current delivery")
+            _require(anchor == work["delivery"]["anchor"], "audit checkpoint anchor does not match current delivery")
+            _require(actor != work["delivery"]["actor"], "executor cannot issue its own audit checkpoint")
+            _require(bool(evidence), "audit checkpoint requires evidence")
+            counts = _validated_counts(payload.get("counts"), context="audit checkpoint")
+            _require(
+                counts["failed"] == 0 and counts["skipped"] == 0 and counts["unknown"] == 0,
+                "passing audit checkpoint cannot contain failed, skipped, or unknown checks",
+            )
+            work["audit_checkpoint"] = {
+                "event_id": event["event_id"],
+                "anchor": anchor,
+                "actor": actor,
+                "evidence": list(evidence),
+                "counts": counts,
+            }
+
         elif event_type == "gate.recorded":
             _require(loop == "quality", "gate recording requires quality loop")
             work = _work(state, subject)
@@ -1292,16 +1442,30 @@ def replay_events(
             _require(loop == "governance", "work acceptance requires governance loop")
             work = _work(state, subject)
             _require(work["status"] == "quality-passed", f"work {subject} has not passed quality")
+            assessment = work.get("risk_assessment") or {}
+            requires_post_readback = (
+                work.get("risk_policy_version") == RISK_POLICY_VERSION
+                and (work["risk"] == "strict" or assessment.get("environment_change") is True)
+            )
+            if requires_post_readback:
+                _require(bool(evidence), "work acceptance requires fresh runtime readback evidence")
+                if work["risk"] == "strict":
+                    _require(evidence[0] != work.get("pre_readback"), "strict post-action runtime readback must be separate from pre-action readback")
             current_anchor = work["delivery"]["anchor"]
+            if work.get("risk_policy_version") == RISK_POLICY_VERSION and work["risk"] == "strict":
+                checkpoint = work.get("audit_checkpoint")
+                _require(checkpoint is not None, "strict work acceptance requires audit checkpoint")
+                _require(checkpoint.get("anchor") == current_anchor, "strict audit checkpoint targets stale anchor")
             work_gates = state["gates"].get(subject, {})
-            for gate_id, definition in gate_defs.items():
-                if not definition.get("mandatory", False):
-                    continue
+            for gate_id, definition in _required_gate_definitions(work, gate_defs).items():
                 result = work_gates.get(gate_id)
-                _require(result is not None, f"mandatory gate missing: {gate_id}")
-                _require(result["anchor"] == current_anchor, f"mandatory gate {gate_id} targets stale anchor")
-                _require(result["verdict"] == "pass", f"mandatory gate failed: {gate_id}")
+                gate_kind = "mandatory" if definition.get("mandatory") else "required"
+                _require(result is not None, f"{gate_kind} gate missing: {gate_id}")
+                _require(result["anchor"] == current_anchor, f"{gate_kind} gate {gate_id} targets stale anchor")
+                _require(result["verdict"] == "pass", f"{gate_kind} gate failed: {gate_id}")
             work["status"] = "accepted"
+            if requires_post_readback:
+                work["post_readback"] = evidence[0]
 
         elif event_type == "work.closed":
             _require(loop == "governance", "work closure requires governance loop")
@@ -1372,7 +1536,20 @@ def replay_events(
             _work(state, payload.get("work_id", ""))
             work = _work(state, payload["work_id"])
             definition = resource_defs[resource_id]
-            if definition.get("risk") == "strict" or work["risk"] == "strict":
+            if work.get("risk_policy_version") == RISK_POLICY_VERSION:
+                conflict_prone = definition.get("mode") in {"exclusive", "serialized"} or definition.get("type") == "port"
+                requires_probe = work["risk"] in {"standard", "strict"} or conflict_prone
+                if requires_probe:
+                    _require(bool(evidence), f"resource {resource_id} requires typed probe evidence")
+                if work["risk"] == "strict":
+                    _require_work_action_decision_scope(
+                        state,
+                        event.get("authorization"),
+                        action="resource.claim",
+                        work_id=work["id"],
+                        resource_id=resource_id,
+                    )
+            elif definition.get("risk") == "strict" or work["risk"] == "strict":
                 decision = state["decisions"].get(work.get("authorization"))
                 _require(decision is not None, f"strict resource {resource_id} requires recorded User authorization")
                 _require(not decision.get("revoked"), f"strict resource {resource_id} authorization is revoked")
@@ -1392,6 +1569,7 @@ def replay_events(
                 "expires_at": payload["expires_at"],
                 "active": True,
                 "stateful": definition.get("type") in STATEFUL_RESOURCE_TYPES,
+                "probe_evidence": list(evidence),
             }
 
         elif event_type in {"resource.released", "resource.recovered"}:
@@ -1529,7 +1707,7 @@ def _enforce_typed_transition_evidence(
     anchor: str | None,
     evidence: list[str] | None,
 ) -> None:
-    typed_events = {"work.delivered", "quality.passed", "quality.rejected", "gate.recorded"}
+    typed_events = {"work.delivered", "quality.passed", "quality.rejected", "gate.recorded", "audit.checked"}
     if event_type in {"work.accepted", "work.closed"}:
         work = state.get("works", {}).get(subject)
         if not isinstance(work, dict) or not isinstance(work.get("delivery"), dict):
@@ -1542,18 +1720,28 @@ def _enforce_typed_transition_evidence(
             result = verify_evidence(paths, evidence_id, state=state)
             if result["status"] != "valid":
                 raise VoyageError(f"current delivery evidence {evidence_id} is {result['status']}: {'; '.join(result['reasons'])}")
-        gate_definitions = load_json(paths.gates).get("gates", [])
-        mandatory = {
-            item.get("id") for item in gate_definitions
-            if isinstance(item, dict) and item.get("mandatory") is True
+        gate_definitions = {
+            item.get("id"): item
+            for item in load_json(paths.gates).get("gates", [])
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
         }
+        required = set(_required_gate_definitions(work, gate_definitions))
         for gate_id, result_data in state.get("gates", {}).get(subject, {}).items():
-            if gate_id not in mandatory:
+            if gate_id not in required:
                 continue
             for evidence_id in result_data.get("evidence", []):
                 result = verify_evidence(paths, evidence_id, state=state)
                 if result["status"] != "valid":
                     raise VoyageError(f"current gate evidence {evidence_id} is {result['status']}: {'; '.join(result['reasons'])}")
+        if event_type == "work.accepted" and work.get("risk_policy_version") == RISK_POLICY_VERSION and work["risk"] == "strict":
+            checkpoint = work.get("audit_checkpoint") or {}
+            for evidence_id in checkpoint.get("evidence", []):
+                result = verify_evidence(paths, evidence_id, state=state)
+                if result["status"] != "valid":
+                    raise VoyageError(
+                        f"current audit checkpoint evidence {evidence_id} is {result['status']}: "
+                        f"{'; '.join(result['reasons'])}"
+                    )
         return
     if event_type not in typed_events:
         return
@@ -1570,6 +1758,150 @@ def _enforce_typed_transition_evidence(
         if result["status"] != "valid":
             reason = "; ".join(result["reasons"])
             raise VoyageError(f"evidence {evidence_id} is {result['status']}: {reason}")
+
+
+def _prepare_work_risk(
+    paths: ProjectPaths,
+    state: dict[str, Any],
+    resources: dict[str, Any],
+    *,
+    requested: str,
+    payload: dict[str, Any] | None,
+    evidence: list[str] | None,
+) -> tuple[str, dict[str, Any]]:
+    _require(requested in RISK_LEVELS, f"invalid risk: {requested}")
+    prepared = deepcopy(payload or {})
+    supplied = prepared.get("risk_assessment", {})
+    if supplied is None:
+        supplied = {}
+    _require(isinstance(supplied, dict), "risk_assessment must be an object")
+    version = supplied.get("version", RISK_POLICY_VERSION)
+    _require(version == RISK_POLICY_VERSION, f"unsupported risk policy version: {version}")
+    domains = supplied.get("domains", [])
+    _require(
+        isinstance(domains, list) and all(isinstance(item, str) for item in domains),
+        "risk assessment domains must be a string array",
+    )
+    _require(len(domains) == len(set(domains)), "risk assessment domains must be unique")
+    invalid_domains = set(domains) - set(STRICT_RISK_DOMAINS)
+    _require(not invalid_domains, f"unknown risk domains: {', '.join(sorted(invalid_domains))}")
+    for field in ("unknown", "disputed", "environment_change"):
+        _require(isinstance(supplied.get(field, False), bool), f"risk assessment {field} must be boolean")
+
+    effective_index = RISK_MODE_ORDER.index(requested)
+    reasons: list[str] = []
+    evidence_refs = list(evidence or [])
+    valid_classification = False
+    for evidence_id in evidence_refs:
+        result = verify_evidence(paths, evidence_id, state=state)
+        if result["status"] == "valid":
+            valid_classification = True
+            break
+    if requested == "light" and not valid_classification:
+        effective_index = max(effective_index, RISK_MODE_ORDER.index("standard"))
+        reasons.append("missing-valid-classification-evidence")
+
+    resource_definitions = {
+        item.get("id"): item
+        for item in resources.get("resources", [])
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    for resource_id in prepared.get("required_resources", []):
+        definition = resource_definitions.get(resource_id, {})
+        resource_risk = definition.get("risk", "standard")
+        if resource_risk in RISK_LEVELS:
+            resource_index = RISK_MODE_ORDER.index(resource_risk)
+            if resource_index > effective_index:
+                effective_index = resource_index
+                reasons.append(f"resource-risk:{resource_id}:{resource_risk}")
+
+    unknown = supplied.get("unknown", False)
+    disputed = supplied.get("disputed", False)
+    if unknown:
+        effective_index = RISK_MODE_ORDER.index("strict")
+        reasons.append("classification-unknown")
+    if disputed:
+        effective_index = RISK_MODE_ORDER.index("strict")
+        reasons.append("classification-disputed")
+    strict_domains = sorted(set(domains) & set(STRICT_RISK_DOMAINS))
+    for domain in strict_domains:
+        effective_index = RISK_MODE_ORDER.index("strict")
+        reasons.append(f"strict-domain:{domain}")
+
+    effective = RISK_MODE_ORDER[effective_index]
+    prepared["risk_assessment"] = {
+        "version": RISK_POLICY_VERSION,
+        "requested": requested,
+        "effective": effective,
+        "domains": sorted(domains),
+        "unknown": unknown,
+        "disputed": disputed,
+        "environment_change": supplied.get("environment_change", False),
+        "classification_evidence": evidence_refs,
+        "reasons": reasons,
+    }
+    return effective, prepared
+
+
+def _require_fresh_runtime_readback(
+    paths: ProjectPaths,
+    state: dict[str, Any],
+    evidence: list[str] | None,
+    *,
+    context: str,
+) -> str:
+    _require(bool(evidence), f"{context} requires fresh runtime readback evidence")
+    evidence_id = evidence[0]
+    result = verify_evidence(paths, evidence_id, state=state)
+    _require(result["kind"] == "runtime-readback", f"{context} requires runtime-readback evidence")
+    _require(
+        result["status"] == "valid",
+        f"{context} runtime readback is {result['status']}: {'; '.join(result['reasons'])}",
+    )
+    return evidence_id
+
+
+def _enforce_risk_policy_evidence(
+    paths: ProjectPaths,
+    state: dict[str, Any],
+    *,
+    event_type: str,
+    subject: str,
+    payload: dict[str, Any] | None,
+    evidence: list[str] | None,
+) -> None:
+    work_id = (payload or {}).get("work_id") if event_type == "resource.claimed" else subject
+    work = state.get("works", {}).get(work_id)
+    if not isinstance(work, dict) or work.get("risk_policy_version") != RISK_POLICY_VERSION:
+        return
+    if event_type == "work.started" and work["risk"] == "strict":
+        _require_fresh_runtime_readback(paths, state, evidence, context="strict work start")
+    if event_type == "work.accepted" and (
+        work["risk"] == "strict" or (work.get("risk_assessment") or {}).get("environment_change") is True
+    ):
+        evidence_id = _require_fresh_runtime_readback(paths, state, evidence, context="work acceptance")
+        if work["risk"] == "strict":
+            _require(
+                evidence_id != work.get("pre_readback"),
+                "strict post-action runtime readback must be separate from pre-action readback",
+            )
+    if event_type == "resource.claimed":
+        definitions = {
+            item.get("id"): item
+            for item in load_json(paths.resources).get("resources", [])
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        definition = definitions.get(subject, {})
+        conflict_prone = definition.get("mode") in {"exclusive", "serialized"} or definition.get("type") == "port"
+        requires_probe = work["risk"] in {"standard", "strict"} or conflict_prone
+        if requires_probe:
+            _require(bool(evidence), f"resource {subject} requires typed probe evidence")
+            result = verify_evidence(paths, evidence[0], state=state)
+            _require(result["kind"] in PROBE_EVIDENCE_KINDS, f"resource {subject} requires typed probe evidence")
+            _require(
+                result["status"] == "valid",
+                f"resource {subject} probe evidence is {result['status']}: {'; '.join(result['reasons'])}",
+            )
 
 
 def append_event(
@@ -1594,14 +1926,34 @@ def append_event(
         resources = load_json(paths.resources)
         gates = load_json(paths.gates)
         existing_state = replay_events(events, resources=resources, gates=gates)
+        historical_policy_errors = _risk_policy_evidence_validation_errors(paths, events, existing_state, resources)
+        if historical_policy_errors:
+            raise VoyageError("risk policy evidence failure: " + "; ".join(historical_policy_errors))
         if existing_state["project_stage"] == "legacy-bootstrap" and event_type not in {"project.initialized", "decision.recorded", "project.migrated"}:
             raise VoyageError("legacy project requires migration confirmation before the first write operation")
+        if event_type == "work.created":
+            risk, payload = _prepare_work_risk(
+                paths,
+                existing_state,
+                resources,
+                requested=risk,
+                payload=payload,
+                evidence=evidence,
+            )
         _enforce_typed_transition_evidence(
             paths,
             existing_state,
             event_type=event_type,
             subject=subject,
             anchor=anchor,
+            evidence=evidence,
+        )
+        _enforce_risk_policy_evidence(
+            paths,
+            existing_state,
+            event_type=event_type,
+            subject=subject,
+            payload=payload,
             evidence=evidence,
         )
         previous_hash = events[-1]["hash"] if events else None
@@ -1706,7 +2058,7 @@ def _typed_evidence_validation_errors(
                 continue
             errors.extend(f"evidence {evidence_id}: {error}" for error in _evidence_common_errors(document))
 
-        if event.get("type") not in {"work.delivered", "quality.passed", "quality.rejected", "gate.recorded"}:
+        if event.get("type") not in {"work.delivered", "quality.passed", "quality.rejected", "gate.recorded", "audit.checked"}:
             continue
         anchor = event.get("anchor")
         if isinstance(anchor, str) and EVIDENCE_ID_PATTERN.fullmatch(anchor):
@@ -1719,6 +2071,79 @@ def _typed_evidence_validation_errors(
             result = verify_evidence(paths, evidence_id, state=state)
             if result["status"] != "valid":
                 errors.append(f"consumed evidence {evidence_id} is {result['status']}: {'; '.join(result['reasons'])}")
+    return errors
+
+
+def _risk_policy_evidence_validation_errors(
+    paths: ProjectPaths,
+    events: list[dict[str, Any]],
+    state: dict[str, Any],
+    resources: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    definitions = {
+        item.get("id"): item
+        for item in resources.get("resources", [])
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+
+    def result_at_event(event: dict[str, Any]) -> dict[str, Any] | None:
+        references = event.get("evidence")
+        if not isinstance(references, list) or not references or not isinstance(references[0], str):
+            return None
+        try:
+            checked_at = parse_time(event.get("timestamp"))
+        except (TypeError, ValueError):
+            return None
+        return verify_evidence(paths, references[0], now=checked_at, state=state)
+
+    def has_valid_evidence_at_event(event: dict[str, Any]) -> bool:
+        references = event.get("evidence")
+        if not isinstance(references, list):
+            return False
+        try:
+            checked_at = parse_time(event.get("timestamp"))
+        except (TypeError, ValueError):
+            return False
+        return any(
+            isinstance(reference, str)
+            and verify_evidence(paths, reference, now=checked_at, state=state).get("status") == "valid"
+            for reference in references
+        )
+
+    for event in events:
+        event_type = event.get("type")
+        payload = event.get("payload", {})
+        work_id = payload.get("work_id") if event_type == "resource.claimed" else event.get("subject")
+        work = state.get("works", {}).get(work_id)
+        if not isinstance(work, dict) or work.get("risk_policy_version") != RISK_POLICY_VERSION:
+            continue
+        result = result_at_event(event)
+        assessment = payload.get("risk_assessment") if event_type == "work.created" else None
+        if (
+            event_type == "work.created"
+            and isinstance(assessment, dict)
+            and assessment.get("version") == RISK_POLICY_VERSION
+            and assessment.get("effective") == "light"
+            and not has_valid_evidence_at_event(event)
+        ):
+            errors.append(f"work.created {work_id} requires valid typed classification evidence at action time")
+        elif event_type == "work.started" and work["risk"] == "strict":
+            if result is None or result.get("kind") != "runtime-readback" or result.get("status") != "valid":
+                errors.append(f"work.started {work_id} requires valid runtime-readback evidence at action time")
+        elif event_type == "work.accepted" and (
+            work["risk"] == "strict" or (work.get("risk_assessment") or {}).get("environment_change") is True
+        ):
+            if result is None or result.get("kind") != "runtime-readback" or result.get("status") != "valid":
+                errors.append(f"work.accepted {work_id} requires valid runtime-readback evidence at action time")
+        elif event_type == "resource.claimed":
+            definition = definitions.get(event.get("subject"), {})
+            conflict_prone = definition.get("mode") in {"exclusive", "serialized"} or definition.get("type") == "port"
+            requires_probe = work["risk"] in {"standard", "strict"} or conflict_prone
+            if requires_probe and (
+                result is None or result.get("kind") not in PROBE_EVIDENCE_KINDS or result.get("status") != "valid"
+            ):
+                errors.append(f"resource.claimed {event.get('subject')} requires valid typed probe evidence at action time")
     return errors
 
 
@@ -1802,6 +2227,7 @@ def validate_project(paths: ProjectPaths) -> list[str]:
             state = replay_events(events, resources=resources, gates=gates)
             errors.extend(_truth_runtime_errors(paths, state, registry, manifest))
             errors.extend(_typed_evidence_validation_errors(paths, events, state))
+            errors.extend(_risk_policy_evidence_validation_errors(paths, events, state, resources))
     except VoyageError as exc:
         errors.append(str(exc))
     except (KeyError, TypeError, ValueError) as exc:
@@ -1814,7 +2240,11 @@ def current_state(paths: ProjectPaths) -> dict[str, Any]:
     errors = validate_hash_chain(events)
     if errors:
         raise VoyageError("ledger integrity failure: " + "; ".join(errors))
-    state = replay_events(events, resources=load_json(paths.resources), gates=load_json(paths.gates))
+    resources = load_json(paths.resources)
+    state = replay_events(events, resources=resources, gates=load_json(paths.gates))
+    policy_errors = _risk_policy_evidence_validation_errors(paths, events, state, resources)
+    if policy_errors:
+        raise VoyageError("risk policy evidence failure: " + "; ".join(policy_errors))
     runtime_errors = _truth_runtime_errors(paths, state, load_json(paths.truth_registry), load_json(paths.manifest))
     if runtime_errors:
         raise VoyageError("truth runtime consistency failure: " + "; ".join(runtime_errors))
@@ -2003,6 +2433,64 @@ def extension_status(paths: ProjectPaths) -> dict[str, Any]:
         "extensions": extensions,
         "effective_contract": effective_contract(paths),
     }
+
+
+def risk_status(paths: ProjectPaths, work_id: str) -> dict[str, Any]:
+    state = current_state(paths)
+    work = _work(state, work_id)
+    assessment = deepcopy(work.get("risk_assessment"))
+    return {
+        "work_id": work_id,
+        "policy_version": work.get("risk_policy_version"),
+        "legacy": work.get("risk_policy_version") is None,
+        "declared": work.get("declared_risk", work["risk"]),
+        "effective": work["risk"],
+        "assessment": assessment,
+        "requirements": deepcopy(RISK_POLICIES[work["risk"]]),
+        "missing_controls": _missing_risk_controls(paths, state, work),
+        "status": work["status"],
+        "next_safe_action": next_safe_action(work),
+    }
+
+
+def _missing_risk_controls(paths: ProjectPaths, state: dict[str, Any], work: dict[str, Any]) -> list[str]:
+    if work.get("risk_policy_version") != RISK_POLICY_VERSION:
+        return []
+    missing: set[str] = set()
+    status = work["status"]
+    if work["risk"] == "strict":
+        if status == "draft":
+            missing.add("user-decision:work.authorize")
+        if status in {"authorized", "rejected"}:
+            missing.update({"user-decision:work.start", "runtime-readback:pre-action"})
+        if status in {"delivered", "quality-passed"} and work.get("audit_checkpoint") is None:
+            missing.add("audit.checked:current-anchor")
+        if status == "quality-passed":
+            missing.add("runtime-readback:post-action")
+    elif status == "quality-passed" and (work.get("risk_assessment") or {}).get("environment_change") is True:
+        missing.add("runtime-readback:post-action")
+
+    if status in {"authorized", "rejected"}:
+        active_resources = {
+            lease["resource_id"]
+            for lease in state["leases"].values()
+            if lease.get("active") and lease.get("work_id") == work["id"]
+        }
+        for resource_id in set(work.get("required_resources", [])) - active_resources:
+            missing.add(f"resource-lease:{resource_id}")
+
+    if status == "quality-passed":
+        gate_defs = {
+            item.get("id"): item
+            for item in load_json(paths.gates).get("gates", [])
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        results = state.get("gates", {}).get(work["id"], {})
+        for gate_id in _required_gate_definitions(work, gate_defs):
+            result = results.get(gate_id)
+            if not result or result.get("verdict") != "pass":
+                missing.add(f"gate:{gate_id}")
+    return sorted(missing)
 
 
 def activate_truth(
@@ -2623,6 +3111,11 @@ def recovery_snapshot(
                 "title": work["title"],
                 "status": work["status"],
                 "risk": work["risk"],
+                "declared_risk": work.get("declared_risk", work["risk"]),
+                "effective_risk": work["risk"],
+                "risk_assessment": deepcopy(work.get("risk_assessment")),
+                "requirements": deepcopy(RISK_POLICIES[work["risk"]]),
+                "missing_controls": _missing_risk_controls(paths, state, work),
                 "anchor": work["delivery"]["anchor"] if work.get("delivery") else None,
                 "next_safe_action": next_safe_action(work),
             }
@@ -2644,6 +3137,7 @@ def recovery_snapshot(
         "rules": state["rules"],
         "volatile_recheck_required": [lease["resource_id"] for lease in leases if lease["stateful"] or lease["expired"]],
         "extensions": extension_status(paths),
+        "risk_policy": risk_policy_view(),
         **facts,
     }
 

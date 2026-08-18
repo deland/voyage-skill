@@ -12,6 +12,7 @@
     "loop": {"enum": ["execution", "quality", "governance", "audit", "user", "system"]},
     "type": {
       "enum": [
+        "audit.checked",
         "audit.finding",
         "channel.acknowledged",
         "channel.sent",

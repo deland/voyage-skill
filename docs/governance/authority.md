@@ -59,6 +59,26 @@ record User authorization before execution.
 Unclear risk, missing evidence, disagreement, or classification conflict always
 selects the stricter mode.
 
+<!-- executable-risk-policy:start -->
+Executable policy version 1 orders modes as `light`, `standard`, then `strict`.
+Every mode keeps immutable anchors, independent quality, append-only ledger
+integrity, truth-defined mandatory gates, loop separation, and User authority.
+
+`light` requires valid typed classification evidence; without it the effective
+mode becomes `standard`. `standard` probes every declared resource and applies
+project-defined mode gates. `strict` requires action-scoped User decisions,
+fresh runtime readback before and after execution, matching risk-domain gates,
+typed resource probes, and an independent audit checkpoint on the current
+delivery anchor.
+
+Unknown or disputed classification and the domains `credentials`,
+`gate-relaxation`, `irreversible`, `material-cost`, `permissions`,
+`persistent-data`, `production`, `public-external-write`, and `security` select
+`strict`. A required resource can only maintain or increase the effective mode.
+Legacy work without the version-1 assessment marker keeps historical replay
+behavior; it does not gain fabricated classification evidence.
+<!-- executable-risk-policy:end -->
+
 ## Rule lifecycle
 
 <!-- rule-states:start -->

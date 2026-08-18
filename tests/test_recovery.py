@@ -11,7 +11,7 @@ from pathlib import Path
 
 import voyage_skill.core as core
 
-from tests.support import operational_project
+from tests.support import operational_project, typed_command_evidence
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -56,6 +56,7 @@ class RecoveryTestCase(unittest.TestCase):
             version="1.0.0",
             decision_id="USER-ENABLE-ENVIRONMENT-CONTROL",
         )
+        self.resource_probe = typed_command_evidence(self.paths, name="recovery-resource-probe", producer="probe")
         self.now = datetime.now(timezone.utc).replace(microsecond=0)
 
     def tearDown(self) -> None:
@@ -79,7 +80,7 @@ class RecoveryTestCase(unittest.TestCase):
             subject=subject,
             risk="standard",
             payload=payload,
-            evidence=evidence,
+            evidence=evidence if evidence is not None else [self.resource_probe],
         )
 
     def recover(self, *, port_probe=lambda _port, _host="127.0.0.1": False) -> dict:
@@ -279,7 +280,7 @@ class ResourceRecoveryTests(RecoveryTestCase):
 
     def test_unprobed_stateful_resource_is_unknown(self) -> None:
         core.register_resource(self.paths, actor="gov", resource_id="account:ci", resource_type="account", mode="exclusive")
-        self.claim_resource("account:ci", evidence=["legacy:login-ok"])
+        self.claim_resource("account:ci", evidence=[self.resource_probe])
         item = next(item for item in self.recover()["unknown"] if item["subject"] == "account:ci")
         self.assertEqual(item["claim"], "resource.lease-active")
         self.assertIn("probe", item["next_safe_action"])

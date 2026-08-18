@@ -61,6 +61,32 @@ gain invented extension state.
 Every edge names its endpoints, preconditions, creating permission, required
 evidence, invalidation conditions, and failure transition.
 
+## Executable risk enforcement
+
+<!-- risk-enforcement:start -->
+New work records a version-1 `risk_assessment` containing requested and
+effective mode, risk domains, environment-change intent, classification
+unknown/disputed flags, typed classification evidence, and escalation reasons.
+Effective risk is monotonic across the request, required resource risks, and
+the high-risk domain set.
+
+Optional gate definitions may add `risk_modes` and `risk_domains`. A mandatory
+gate always applies; a mode gate applies to its named effective mode; a domain
+gate applies to matching Strict work. No risk policy can remove a mandatory
+gate.
+
+Strict `work.authorize`, `work.start`, and `resource.claim` transitions require
+a recorded User decision scoped to the exact action, project, work, and, for a
+claim, resource. Strict start consumes a fresh `runtime-readback`; acceptance
+consumes a separate fresh post-action readback and requires `audit.checked` on
+the current delivery anchor. Light and Standard require post-action readback
+only when `risk_assessment` declares an environment change.
+
+Resource probe references remain on the lease. The legacy work without the policy
+marker replays under its historical transition rules and never receives an
+invented assessment.
+<!-- risk-enforcement:end -->
+
 ## Invariants
 
 1. Async review, test, merge, and deployment reference an immutable anchor.
