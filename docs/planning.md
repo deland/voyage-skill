@@ -1987,3 +1987,167 @@ active → retired | superseded
 - Readback: the project is operational with six activation-verified truth sources, no missing domain, no unverified active source, zero active blocks or leases, zero unknown or conflicting recovery facts, Darwin `fcntl` append-safe writes, and explicitly non-cryptographic local-caller actor identity
 - Remaining issues: no authorized PLAN-0001 implementation remains; legacy truth activation evidence remains declared rather than typed-observed but does not block the operational project; snapshot work remains prohibited below the fixed threshold; any new permanent-kernel or extension work requires a new appended plan and User authority
 - Next safe action: commit and push this append-only plan closure on the development branch, then ask the User to authorize a PLAN-0002 objective before starting further product development
+
+---
+
+## 2026-08-19 · PLAN-0002 · 真实项目接入与发布加固
+
+### 记录状态
+
+- Status: active
+- Baseline: `1bba25b6a4b5b309c82ed1a0c59e6f996f0c9a92`
+- Branch: `xp/plan-real-world-hardening`
+- Authority: User explicitly authorized PLAN-0002 on 2026-08-19
+- Supersedes: none; PLAN-0001 remains complete
+- Objective: prove that VoyageSkill can be built, installed, invoked, adopted, upgraded, recovered, and accepted from clean external project contexts without conversation memory, repository-local imports, fabricated evidence, or permanent-kernel expansion
+
+### 固定产品决策
+
+1. PLAN-0002 hardens two distinct delivery surfaces: a source-checkout Skill bundle containing the stable entry and deterministic scripts, and an installable Python CLI artifact exposing `voyage`.
+2. Build dependencies and runtime dependencies are separate claims. The installed runtime must retain zero third-party dependencies; a source build may require declared build tooling and must fail with a clear prerequisite message when it is absent.
+3. External-journey acceptance uses fresh temporary Git repositories, separate CLI processes, unrelated working directories, sanitized `PYTHONPATH`, and only persisted project files plus command readback between steps.
+4. Tests must not promote fixtures, generated reports, build directories, wheel contents, or release manifests into project truth. Disposable artifacts remain deletable and reproducible from a commit.
+5. Upgrade coverage validates the current reader against explicit historical fixture contracts and proves no silent ledger rewrite, truth activation, evidence promotion, extension enablement, or risk reduction.
+6. Release evidence binds source commit, artifact digest, interpreter, test totals, Skill validation, dogfood validation, and external-journey results. A report is evidence, not authority to publish.
+7. Publishing packages, creating remote releases or tags, signing artifacts, deleting branches, enabling optional extensions, adding providers, adding Windows locking, or changing the supported one-machine trust boundary requires separate User authorization and is outside PLAN-0002.
+8. No new permanent graph node, edge, durable state, mandatory gate, or background service may be added. A newly discovered need must first be recorded as a finding and separately authorized.
+
+### 执行顺序
+
+| 顺序 | Work ID | 优先级 | 目标 | 依赖 |
+| --- | --- | --- | --- | --- |
+| 0 | RW-000 | P0 | 建立发行契约守卫与黑盒测试基座 | PLAN-0002 |
+| 1 | RW-101 | P0 | 构建、安装和入口点制品可复现 | RW-000 |
+| 2 | RW-102 | P0 | 全新项目与采用项目的外部黑盒旅程 | RW-101 |
+| 3 | RW-103 | P1 | 历史项目升级、跨会话恢复与失败原子性 | RW-102 |
+| 4 | RW-201 | P1 | 生成可验证的本地发布证据包与验收报告 | RW-101～RW-103 |
+
+### RW-000 · 发行契约守卫与黑盒测试基座
+
+范围：
+
+- 新增发行契约决策，明确 Skill bundle、CLI artifact、构建依赖、运行时依赖、版本和发布授权边界；
+- 建立只使用 Python 标准库的隔离复制、子进程、venv、文件摘要和工作树突变检测测试基座；
+- 增加静态契约测试，锁定单一版本、Python 下限、console entry point、零运行时依赖和 Skill 元数据；
+- 记录当前干净环境安装失败的真实基线，不在本工作包中伪造成功制品。
+
+非目标：不修复构建、不新增 `--version`、不执行完整外部项目旅程、不创建发布制品、不改运行时状态机。
+
+验收：发行决策进入 active decisions 真源；测试基座自身有正负用例；静态分发合同与当前文件一致；完整回归和 dogfood 不退化。
+
+### RW-101 · 构建、安装与入口点制品
+
+范围：
+
+- 从干净提交构建 wheel 和 source archive，输出到源树之外；
+- 检查制品内容、版本、许可证、Python 下限、入口点和依赖元数据；
+- 将 wheel 安装到无项目源码、无 `PYTHONPATH` 的全新 venv，从无关目录运行 `voyage --help`、`validate` 和 `recover`；
+- 提供确定性 `--version` 读回，并防止 package metadata、模块版本和 CLI 版本漂移；
+- 明确源码安装所需构建工具，不能把联网下载当成测试成功的隐含前提。
+
+非目标：不发布 PyPI、不承诺所有 Python/OS 组合、不把开发文档、研究输入、tests 或 dogfood ledger 塞入 CLI wheel。
+
+验收：本地构建脚本实际运行；wheel 在全新 venv 中离线安装；installed console 与 source-checkout script 的命令交换一致；源树无生成残留。
+
+### RW-102 · 全新与采用项目的外部黑盒旅程
+
+范围：
+
+- 只通过安装后的 `voyage` 子进程完成全新项目 init、draft 审阅、User decision、四领域 activate、work/resource/delivery/quality/accept/close 和冷恢复；
+- 在另一个已有 Git 项目中采用自定义 truth registry，验证项目 ID、路径、激活和不覆盖边界；
+- 每一步在新进程和不相关 cwd 中执行，状态只从磁盘与命令读回恢复；
+- 对交付 commit、命令结果、runtime readback、User decision 和资源探测使用真实类型化证据。
+
+非目标：不调用 Python core 绕过 CLI，不模拟生产部署，不启用可选扩展，不使用 dogfood 仓库账本作为测试夹具。
+
+验收：两条旅程从零开始通过；执行者不能自审；错误锚点、错误决策 scope、资源冲突和 bootstrap 越权均在子进程边界被拒绝且无半写入。
+
+### RW-103 · 升级、跨会话恢复与失败原子性
+
+范围：
+
+- 建立最小、人工可审计的 historical fixture manifests/ledgers，并标明来源版本与摘要；
+- 验证 legacy migration、当前显式扩展模式和未来未知版本的接受/拒绝边界；
+- 在进程中断、过期租约、损坏证据、账本尾部损坏、缺锁后端和 init marker 存在时验证下一安全动作；
+- 比较操作前后文件摘要，证明失败不会静默重写账本、真源、资源或 manifest。
+
+非目标：不自动升级未知格式，不引入快照/数据库，不提供 Windows writer，不声称抵御同账号恶意写者。
+
+验收：支持的历史 fixture 可恢复或显式迁移；未知版本 fail closed；所有负向场景有确定性 JSON、退出码、最小阻塞范围和零越权突变。
+
+### RW-201 · 本地发布证据与验收报告
+
+范围：
+
+- 生成内容寻址的本地 release evidence manifest，引用 commit、wheel/source digest、版本、平台、Python、测试计数和外部旅程结果；
+- 对报告进行独立 readback，拒绝缺失制品、摘要漂移、错误 commit、测试 unknown/skip 或 Skill/dogfood 未通过；
+- 在 active runbook 中记录可重复的本地候选发布流程和 User-controlled 外部发布停止点；
+- 保持 SKILL.md 只提供发现与停止条件，把详细发布流程留在 active operations truth。
+
+非目标：不创建远端 tag/release、不上传包、不签名、不生成 changelog/安装指南等额外 Skill 文件、不改变 User 最终授权。
+
+验收：同一 commit 与相同输入产生规范化证据；任一制品或报告字段变化都会失败；删除报告后可从不可变输入重建；发布动作在 User 授权前停止。
+
+### PLAN-0002 统一门禁
+
+每个 Work ID 必须遵守：先追加 START 与完整测试矩阵，捕获预期红灯，再逐子任务实现并测试；实现提交成为不可变锚点后才追加 CLOSE。每次完整验收至少包含 focused tests、全仓回归、compileall、dogfood validate/truth/recover、CLI reference、官方 Skill validator、源树清洁度和远端水位读回。测试结果必须报告 pass/fail/skip/unknown，不能只写“成功”。
+
+### 当前基线读回
+
+- PLAN-0001 已完整合并，当前仓库有 324 个通过测试，官方 Skill validator、dogfood validate 和 CLI reference 均通过。
+- `pyproject.toml` 声明 `setuptools>=61`，当前宿主为 setuptools 58.0.4，且没有 `build` 模块；这些是构建环境事实，不是运行时依赖结论。
+- 在全新本地克隆与隔离 venv 中执行 `pip install --no-build-isolation --no-deps <source>`，因缺少 `bdist_wheel` 确定性失败；当前没有测试证明 README 中的安装声明。
+- 源码 checkout script 可定位自身 `src`，但尚无无关 cwd、净化环境、安装后 console、artifact contents、版本交换或完整外部旅程验收。
+
+### 下一立即动作
+
+执行 RW-000。先追加 DEV-0010 START 测试矩阵并提交计划基线，再添加测试文件、捕获红灯，最后才实现发行决策和黑盒测试基座。
+
+---
+
+## 2026-08-19 · DEV-0010 · RW-000 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `1bba25b6a4b5b309c82ed1a0c59e6f996f0c9a92`
+- Anchor: pending
+- Supersedes: none
+- Scope: add a registered release-contract decision, static distribution guards, and a reusable standard-library black-box harness for isolated source copies, subprocesses, venvs, digests, and mutation readback
+- Non-goals: no build fix, wheel/source artifact, CLI `--version`, external lifecycle journey, historical fixture, release manifest, remote publication, extension enablement, or runtime state-machine change
+- Risk: light; tests and active contracts only, with all generated inputs confined outside the repository
+- Dependencies: PLAN-0002 User authority, PLAN-0001 merged delivery, clean `1bba25b` baseline, current packaging files and Skill metadata
+- Acceptance gates: all tests below are added before implementation and expose only the documented contract/harness gaps; every harness negative case is deterministic; complete regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, planning append-only check, and diff hygiene pass
+- Actual result: pending
+- Tests: 12 methods defined below; not run yet
+- Readback: clean-source install baseline fails at missing `bdist_wheel`; package version is 0.1.0, console entry is `voyage = voyage_skill.cli:main`, runtime dependency declaration is empty, and `SKILL.md` is 112 lines
+- Remaining issues: D-0003 and active distribution authority are absent; no repository-owned isolated-distribution harness or guards exist
+- Next safe action: commit and push this planning baseline, then add all 12 RW-000 tests without product edits and capture the expected red result
+
+### ST-0001 · 发行静态合同
+
+实现前测试用例：
+
+1. `packaging_metadata_has_one_version_and_supported_python_floor`：setup metadata 与模块版本一致，Python 下限明确为 3.9，不能存在第二个隐式版本。
+2. `console_entrypoint_and_source_script_target_the_same_cli`：console entry point、`python -m voyage_skill` 和 checkout script 都进入同一个 CLI main。
+3. `runtime_dependency_contract_is_empty_and_build_requirements_are_explicit`：运行时依赖为空，构建依赖单独声明且不会被文档称为运行时依赖。
+4. `skill_metadata_is_valid_progressive_and_distribution_neutral`：Skill 官方校验可通过、保持精简，并能发现 installed console 或 checkout script 而不绑定本仓库绝对路径。
+5. `release_contract_decision_is_registered_and_active`：D-0003 存在、active，并由 decisions 真源索引。
+6. `active_truth_defines_two_distribution_surfaces_and_user_publish_boundary`：product/operations/decision 对 Skill bundle、CLI artifact 和 User-controlled publish 停止点一致。
+
+### ST-0002 · 标准库黑盒测试基座
+
+实现前测试用例：
+
+1. `isolated_source_copy_contains_only_tracked_commit_files`：隔离源复制绑定 commit，只包含 tracked 内容，不携带 worktree 修改、缓存或构建残留。
+2. `black_box_environment_removes_pythonpath_and_uses_unrelated_cwd`：子进程环境移除 `PYTHONPATH/PYTHONHOME`，cwd 位于源树和目标项目之外。
+3. `black_box_runner_captures_argv_exit_stdout_stderr_and_duration`：runner 保存完整 argv、退出码、原始输出与非负时长，不把过滤文本当证据。
+4. `black_box_runner_reports_timeout_without_orphan_success`：超时产生确定性失败和原始诊断，不伪造 exit 0。
+5. `tree_digest_detects_generated_or_mutated_source_files`：tracked/untracked 文件新增、删除或改变均能被摘要与清单读回发现。
+6. `temporary_distribution_workspace_is_outside_repository_and_disposable`：测试工作区不位于仓库内，清理后无项目文件或环境状态残留。
+
+### DEV-0010 执行顺序
+
+1. 添加 12 个测试及最小测试 helper 声明，不修改产品/正式文档；运行并记录红灯分类。
+2. 先实现 ST-0002 测试基座，使其 6/6 通过；运行已有 324 项回归。
+3. 实现 D-0003、决策索引和必要的 active product/operations/Skill 最小合同，使 ST-0001 6/6 通过。
+4. 运行 12 项 focused、全仓、compileall、dogfood、CLI reference 和官方 Skill 校验。
+5. 创建实现提交作为不可变锚点，在其上重跑门禁，再追加 DEV-0010 CLOSE。
