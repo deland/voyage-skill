@@ -49,14 +49,23 @@ evidence, invalidation conditions, and failure transition.
 
 ## Runtime state
 
-Runtime facts have three classes:
+Planned state records what governance intends. Recovery facts remain separate
+from that intent and from one another.
 
-- planned: what governance intends;
-- declared: what a principal reports;
-- observed: what a command, immutable anchor, or readback proves.
+<!-- recovery-facts:start -->
+Read derived facts from exactly four buckets: `observed`, `declared`, `unknown`,
+and `conflicts`. Require every fact to contain `subject`, `claim`,
+`source_event`, `evidence_id`, `evidence_kind`, `verified_at`, `freshness`,
+`conclusion`, `blocking_scope`, `next_safe_action`, and `required_loop`.
+Treat only live-valid typed evidence or an adapted fresh probe as observed.
+Treat replayed claims without qualifying observation as declared. Treat expired,
+missing, tampered, legacy-unverified, or unprobed volatile facts as unknown.
+Treat only deterministic contradictions in one scope as conflicts, remove their
+participants from observed, and block only the reported scope.
+<!-- recovery-facts:end -->
 
 Authoritative transitions require observed evidence where the gate demands it.
-Declaration/observation disagreement remains visible and creates conflict.
+Unknown and conflicting facts cannot satisfy such a gate.
 
 <!-- work-states:start -->
 Durable work states are exactly `draft`, `authorized`, `active`, `delivered`,

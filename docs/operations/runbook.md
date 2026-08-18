@@ -22,6 +22,18 @@ python3 <voyage-skill>/scripts/voyage.py --root <project> truth status
 python3 <voyage-skill>/scripts/voyage.py --root <project> recover
 ```
 
+<!-- recovery-facts:start -->
+Read derived facts from exactly four buckets: `observed`, `declared`, `unknown`,
+and `conflicts`. Require every fact to contain `subject`, `claim`,
+`source_event`, `evidence_id`, `evidence_kind`, `verified_at`, `freshness`,
+`conclusion`, `blocking_scope`, `next_safe_action`, and `required_loop`.
+Treat only live-valid typed evidence or an adapted fresh probe as observed.
+Treat replayed claims without qualifying observation as declared. Treat expired,
+missing, tampered, legacy-unverified, or unprobed volatile facts as unknown.
+Treat only deterministic contradictions in one scope as conflicts, remove their
+participants from observed, and block only the reported scope.
+<!-- recovery-facts:end -->
+
 ## CLI command reference
 
 This marked section is generated from argparse. Run

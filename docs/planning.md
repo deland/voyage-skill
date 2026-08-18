@@ -1186,3 +1186,117 @@ active → retired | superseded
 - Readback: anchor contains 15 changed files with 883 insertions and 41 deletions, including the deterministic reference script/module and 388-line convergence suite; the worktree was clean before this CLOSE append
 - Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned equivalent frontmatter, metadata, identity, schema, invocation, and dogfood checks pass
 - Next safe action: commit this append-only CLOSE record, push `xp/plan-minimal-kernel`, verify the remote head, then begin MK-104 with a new test-first START record
+
+---
+
+## 2026-08-18 · DEV-0005 · MK-104 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `3ee37c582fd987a743925f3ff3df7947ae44e569`
+- Anchor: pending
+- Supersedes: none
+- Scope: derive deterministic `observed`, `declared`, `unknown`, and `conflicts` recovery facts from the validated ledger, typed evidence readback, lease freshness, registered resource probes, and current replay state
+- Non-goals: no new durable event types, no background monitor, no arbitrary probe/plugin execution, no remote evidence retrieval, no probabilistic conflict inference, no MK-201 extension layering, and no derived graph engine
+- Risk: standard; recovery is a read-only derived view, but false observation or over-broad conflict classification could incorrectly authorize or block work
+- Dependencies: MK-102 typed evidence and MK-103 converged event/resource contracts complete; local and remote branch both resolve to the baseline above
+- Acceptance gates: every ST-1041 through ST-1045 test below is added before product implementation and observed failing for the documented gap; each subtask passes its own tests plus cumulative recovery tests; final full regression, compileall, dogfood validate/truth/recover, CLI reference, append-only planning enforcement, deterministic readback, and diff hygiene pass
+- Actual result: pending
+- Tests: ST-1041 through ST-1045 defined below
+- Readback: MK-103 CLOSE is the only change in baseline commit; worktree was clean at START; current recover output has no four-bucket fact contract
+- Remaining issues: current recovery mixes replayed declarations with volatile state, does not reverify evidence into fact buckets, and cannot surface contradictions or item-scoped permissions/actions
+- Next safe action: add the complete MK-104 recovery suite without product edits, capture the red baseline, then implement ST-1041 first
+
+### DEV-0005 固定恢复决策
+
+1. Recovery remains a derived, read-only view; it never appends verification or probe events and never mutates project state.
+2. The top-level fact buckets are exactly `observed`, `declared`, `unknown`, and `conflicts`; existing bootstrap/work/lease/block/rule fields remain for backward-compatible operational context.
+3. Every fact item includes `subject`, `claim`, `source_event`, `evidence_id`, `evidence_kind`, `verified_at`, `freshness`, `conclusion`, `blocking_scope`, `next_safe_action`, and `required_loop`; unavailable fields are explicit `null`, never omitted.
+4. A typed evidence reference is observed only when live verification is valid. Expired runtime readback, missing/tampered evidence, unverified legacy evidence, expired leases, and stateful resources without a fresh adapted probe are unknown.
+5. A replayed current-state claim without qualifying independent observation is declared. One fact appears in only one primary bucket unless a conflict replaces its otherwise observed/declared representation.
+6. Conflicts require deterministic contradiction in the same scope: mutually different valid runtime observations for the same environment/version/field, or a released port whose registered readback still reports occupied. Do not infer conflict from absence alone.
+7. Recovery accepts an injectable verification time and port-probe function internally so identical ledger, evidence, time, and probe inputs produce byte-equivalent fact buckets. CLI uses real UTC time and the real port probe.
+8. Ordering is deterministic by bucket, subject, claim, source event, and evidence ID. Conflict and unknown items block only their named scope and provide the minimum safe next action and required loop.
+
+### ST-1041 · 四类输出与事实项合同
+
+实现前测试用例：
+
+1. `recovery_exposes_exact_fact_buckets_and_complete_item_contract`：四个 bucket 均存在，事实项包含全部固定字段且 null 显式保留。
+2. `recovery_preserves_existing_operational_context`：bootstrap、work、active leases、blocks、rules、ledger head 等 v0.2 字段保持兼容。
+3. `recovery_fact_order_and_fixed_time_are_deterministic`：固定 now/probe 对相同输入连续运行得到完全相同 bucket 和 `validated_at`。
+4. `recovery_is_read_only_and_does_not_append_events`：恢复前后 ledger 字节与 head 不变。
+
+### ST-1042 · 类型化证据与 legacy 分类
+
+实现前测试用例：
+
+1. `valid_typed_evidence_is_observed_with_live_verification_metadata`：有效 typed evidence 进入 observed，并报告 kind、验证时间、fresh freshness 和 source event。
+2. `expired_runtime_readback_is_unknown_not_observed`：过期 runtime readback 只进入 unknown，结论与下一动作要求重新读回。
+3. `missing_or_tampered_typed_evidence_is_unknown`：缺失或内容寻址不一致的引用进入 unknown，不使 recovery 崩溃或误报 observed。
+4. `legacy_string_evidence_is_never_observed`：legacy 字符串证据只能 declared/unknown，并给出迁移到 typed evidence 的动作。
+
+### ST-1043 · 租约、资源探测与冲突
+
+实现前测试用例：
+
+1. `expired_active_lease_is_unknown_with_minimal_scope`：过期 active lease 进入 unknown，blocking scope 仅为对应 resource/lease。
+2. `unprobed_stateful_resource_is_unknown`：未适配实时探测的 stateful resource 即使租约未过期也进入 unknown。
+3. `released_port_still_occupied_is_conflict`：账本声明 released 但同一注册端口读回 occupied 时进入 conflicts，要求 governance reconcile。
+4. `released_port_readback_free_is_observed_without_conflict`：released 与端口 free 一致时形成 observed release，不进入 conflicts。
+5. `probe_failure_is_unknown_not_conflict`：探测异常或不可得进入 unknown，不伪造冲突。
+
+### ST-1044 · 同 scope 有效观测冲突与去重
+
+实现前测试用例：
+
+1. `contradictory_valid_runtime_fields_in_same_scope_conflict`：同 environment/version/field 的两个新鲜有效读回值不同，生成一个确定性 conflict。
+2. `different_runtime_scopes_do_not_conflict`：环境或版本不同的观测分别进入 observed。
+3. `identical_runtime_observations_are_deduplicated_without_conflict`：同 scope 同值读回不冲突并稳定去重。
+4. `conflicted_observations_do_not_remain_in_observed_bucket`：参与冲突的事实仅出现在 conflicts，避免双重结论。
+
+### ST-1045 · CLI、文档与 dogfood 收敛
+
+实现前测试用例：
+
+1. `recover_cli_emits_four_bucket_json_and_is_repeatable_with_fixed_fixture`：CLI JSON 暴露四 bucket，且不依赖会话记忆补全字段。
+2. `skill_runbook_and_graph_define_same_recovery_contract`：Skill、active runbook、system graph 与 runtime bucket/字段/分类规则一致。
+3. `dogfood_recovery_classifies_without_mutation`：仓库自身 recover 成功、四类输出合法、ledger 不变。
+4. `recovery_unknown_and_conflict_actions_name_required_permission`：每个 unknown/conflict 都给出非空最小动作与 required loop。
+
+---
+
+## 2026-08-18 · DEV-0005 · MK-104 · UPDATE
+
+- Status: in-progress; red baseline captured
+- Baseline: `3ee37c582fd987a743925f3ff3df7947ae44e569`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 21 ST-1041 through ST-1045 tests added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0005 START matrix and fixed recovery decisions
+- Acceptance gates: recovery suite must expose the missing four-bucket contract, evidence classification, resource readback, conflict detection, deterministic inputs, and active-document markers before implementation
+- Actual result: expected FAIL; 21 tests ran, with 5 assertion failures, 14 bucket-missing errors, and 2 existing compatibility/read-only checks passing
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-skill-pycache python3 -B -m unittest tests.test_recovery -v`
+- Readback: failures are limited to absent `observed`/`declared`/`unknown`/`conflicts`, absent recovery constants and injectable inputs, missing typed/legacy/resource classification, missing contradiction handling, and missing Skill/runbook/graph markers; fixtures and existing recovery context are valid
+- Remaining issues: all ST-1041 through ST-1045 implementation work remains
+- Next safe action: implement the ST-1041 fact item constructor, deterministic ordering, injectable time/probe contract, and backward-compatible snapshot buckets; run RecoveryContractTests before ST-1042
+
+---
+
+## 2026-08-18 · DEV-0005 · MK-104 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `3ee37c582fd987a743925f3ff3df7947ae44e569`
+- Anchor: pending
+- Supersedes: none
+- Scope: ST-1041 through ST-1045 implemented; recovery now emits deterministic observed/declared/unknown/conflicts facts while preserving the existing operational context
+- Non-goals: unchanged; no new event type, background monitor, arbitrary probe plugin, remote evidence, MK-201 extension layering, or derived graph engine was added
+- Risk: standard; classification is read-only and conflicts block only the exact resource or runtime field scope
+- Dependencies: MK-102 typed evidence, MK-103 converged contracts, DEV-0005 START decisions, and recorded red baseline satisfied
+- Acceptance gates: 191-test full regression, 22-test recovery suite, compileall, dogfood validate/truth/recover, deterministic fixed-time/probe readback, CLI JSON and reference checks, append-only planning enforcement, active-document contract markers, ledger non-mutation, and diff hygiene
+- Actual result: PASS before commit; 191 passed, 0 failed, 0 skipped; all 22 recovery tests passed; compileall passed with cache under `/tmp`; dogfood validate returned no errors, truth remained operational with six activation-verified active sources, recover emitted all four buckets at the unchanged ledger head, CLI reference was current, and `git diff --check` passed
+- Tests: the original 21 recovery cases captured 5 failures, 14 errors, and 2 existing passes before implementation; a supplementary current-work declaration test was then added and observed failing before its state-view implementation; ST-1041 through ST-1045 were each run independently before the cumulative and full suites
+- Readback: live-valid typed evidence is observed; expired/missing/tampered evidence and unprobed stateful or expired lease facts are unknown; legacy and current replay state are declared; same-scope runtime field disagreements and released-but-occupied ports are conflicts; conflicting observations are removed from observed; every fact has the fixed 11-field contract, scoped action, and required loop
+- Remaining issues: official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; repository-owned frontmatter, metadata, identity, schema, invocation, dogfood, and recovery contract checks pass
+- Next safe action: commit the MK-104 implementation, rerun all 191 tests and acceptance gates against the immutable commit, append DEV-0005 CLOSE with its SHA, then commit and push the close record before MK-201

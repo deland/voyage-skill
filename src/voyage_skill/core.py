@@ -50,6 +50,12 @@ NEXT_SAFE_ACTIONS = {
     "blocked": "satisfy block conditions through an independent resolver",
     "awaiting-user": "wait for scoped User decision",
 }
+RECOVERY_FACT_BUCKETS = ("observed", "declared", "unknown", "conflicts")
+RECOVERY_FACT_FIELDS = (
+    "subject", "claim", "source_event", "evidence_id", "evidence_kind",
+    "verified_at", "freshness", "conclusion", "blocking_scope",
+    "next_safe_action", "required_loop",
+)
 EVIDENCE_KINDS = {"git-commit", "artifact-digest", "command-result", "runtime-readback", "user-decision"}
 EVIDENCE_ID_PATTERN = re.compile(r"^sha256:([a-f0-9]{64})$")
 EVIDENCE_VALIDATOR_VERSION = 1
@@ -1940,15 +1946,17 @@ def truth_status(paths: ProjectPaths) -> dict[str, Any]:
     }
 
 
-def active_leases(state: dict[str, Any]) -> list[dict[str, Any]]:
-    now = datetime.now(timezone.utc)
+def active_leases(state: dict[str, Any], *, now: datetime | None = None) -> list[dict[str, Any]]:
+    checked_at = now or datetime.now(timezone.utc)
+    if checked_at.tzinfo is None:
+        raise VoyageError("lease readback time must include timezone")
     result = []
     for lease in state["leases"].values():
         if not lease["active"]:
             continue
         item = deepcopy(lease)
         try:
-            item["expired"] = parse_time(lease["expires_at"]) <= now
+            item["expired"] = parse_time(lease["expires_at"]) <= checked_at
         except (KeyError, TypeError, ValueError) as exc:
             raise VoyageError(f"lease {lease.get('lease_id', '<unknown>')} expires_at is not a valid date-time") from exc
         item["recovery_required"] = item["expired"] and lease["stateful"]
@@ -1968,9 +1976,386 @@ def new_lease_expiry(ttl_minutes: int) -> str:
     return (datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def recovery_snapshot(paths: ProjectPaths) -> dict[str, Any]:
+def _recovery_fact(
+    *,
+    subject: str,
+    claim: str,
+    source_event: str | None,
+    evidence_id: str | None = None,
+    evidence_kind: str | None = None,
+    verified_at: str | None = None,
+    freshness: str | None = None,
+    conclusion: str,
+    blocking_scope: str | None = None,
+    next_safe_action: str,
+    required_loop: str,
+) -> dict[str, Any]:
+    return {
+        "subject": subject,
+        "claim": claim,
+        "source_event": source_event,
+        "evidence_id": evidence_id,
+        "evidence_kind": evidence_kind,
+        "verified_at": verified_at,
+        "freshness": freshness,
+        "conclusion": conclusion,
+        "blocking_scope": blocking_scope,
+        "next_safe_action": next_safe_action,
+        "required_loop": required_loop,
+    }
+
+
+def recovery_fact_sort_key(item: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(str(item.get(key) or "") for key in ("subject", "claim", "source_event", "evidence_id"))
+
+
+def _evidence_recovery_facts(
+    paths: ProjectPaths,
+    events: list[dict[str, Any]],
+    state: dict[str, Any],
+    *,
+    now: datetime,
+) -> dict[str, list[dict[str, Any]]]:
+    facts: dict[str, list[dict[str, Any]]] = {bucket: [] for bucket in RECOVERY_FACT_BUCKETS}
+    seen: set[tuple[str, str]] = set()
+    for event in events:
+        references = list(event.get("evidence", []))
+        if isinstance(event.get("anchor"), str):
+            references.append(event["anchor"])
+        for evidence_id in references:
+            if not isinstance(evidence_id, str):
+                continue
+            identity = (event["subject"], evidence_id)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            if EVIDENCE_ID_PATTERN.fullmatch(evidence_id) is None:
+                facts["declared"].append(
+                    _recovery_fact(
+                        subject=event["subject"],
+                        claim=event["type"],
+                        source_event=event["event_id"],
+                        evidence_id=evidence_id,
+                        conclusion="declared",
+                        freshness="unverified",
+                        blocking_scope=event["subject"],
+                        next_safe_action="replace legacy evidence with typed evidence",
+                        required_loop=event["loop"],
+                    )
+                )
+                continue
+
+            result = verify_evidence(paths, evidence_id, now=now, state=state)
+            try:
+                document = load_evidence(paths, evidence_id)
+            except VoyageError:
+                document = {}
+            claim = document.get("claim") if isinstance(document.get("claim"), str) else event["type"]
+            if result["status"] == "valid":
+                facts["observed"].append(
+                    _recovery_fact(
+                        subject=event["subject"],
+                        claim=claim,
+                        source_event=event["event_id"],
+                        evidence_id=evidence_id,
+                        evidence_kind=result["kind"],
+                        verified_at=result["verified_at"],
+                        freshness="fresh",
+                        conclusion="valid",
+                        next_safe_action="none",
+                        required_loop=event["loop"],
+                    )
+                )
+                continue
+
+            expired = result["status"] == "unknown" and any("expired" in reason for reason in result["reasons"])
+            facts["unknown"].append(
+                _recovery_fact(
+                    subject=event["subject"],
+                    claim=claim,
+                    source_event=event["event_id"],
+                    evidence_id=evidence_id,
+                    evidence_kind=result["kind"],
+                    verified_at=result["verified_at"],
+                    freshness="expired" if expired else "invalid",
+                    conclusion=result["status"],
+                    blocking_scope=event["subject"],
+                    next_safe_action=(
+                        "re-probe and record fresh typed evidence"
+                        if expired else "repair or replace typed evidence and verify"
+                    ),
+                    required_loop="execution" if result["kind"] == "runtime-readback" else event["loop"],
+                )
+            )
+    return facts
+
+
+def _resource_recovery_facts(
+    paths: ProjectPaths,
+    events: list[dict[str, Any]],
+    state: dict[str, Any],
+    *,
+    now: datetime,
+    port_probe,
+) -> dict[str, list[dict[str, Any]]]:
+    facts: dict[str, list[dict[str, Any]]] = {bucket: [] for bucket in RECOVERY_FACT_BUCKETS}
+    definitions = {
+        item["id"]: item
+        for item in load_json(paths.resources).get("resources", [])
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    lease_events: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        if event.get("type") not in {"resource.claimed", "resource.released", "resource.recovered"}:
+            continue
+        lease_id = event.get("payload", {}).get("lease_id")
+        if isinstance(lease_id, str):
+            lease_events.setdefault(lease_id, []).append(event)
+
+    for lease_id, lease in sorted(state["leases"].items()):
+        resource_id = lease["resource_id"]
+        history = lease_events.get(lease_id, [])
+        source = history[-1] if history else None
+        source_event = source.get("event_id") if source else None
+        scope = f"resource:{resource_id}/lease:{lease_id}"
+        if lease["active"]:
+            try:
+                expired = parse_time(lease["expires_at"]) <= now
+            except (KeyError, TypeError, ValueError):
+                expired = True
+            if expired:
+                facts["unknown"].append(
+                    _recovery_fact(
+                        subject=resource_id,
+                        claim="resource.lease-active",
+                        source_event=source_event,
+                        freshness="expired",
+                        conclusion="unknown",
+                        blocking_scope=scope,
+                        next_safe_action="recover or renew the expired lease after resource readback",
+                        required_loop="governance",
+                    )
+                )
+            elif lease.get("stateful"):
+                facts["unknown"].append(
+                    _recovery_fact(
+                        subject=resource_id,
+                        claim="resource.lease-active",
+                        source_event=source_event,
+                        freshness="unprobed",
+                        conclusion="unknown",
+                        blocking_scope=scope,
+                        next_safe_action="run an adapted fresh resource probe before reuse",
+                        required_loop="execution",
+                    )
+                )
+            else:
+                facts["declared"].append(
+                    _recovery_fact(
+                        subject=resource_id,
+                        claim="resource.lease-active",
+                        source_event=source_event,
+                        freshness="current",
+                        conclusion="declared",
+                        blocking_scope=scope,
+                        next_safe_action="respect the active lease or obtain a governed release",
+                        required_loop="execution",
+                    )
+                )
+            continue
+
+        definition = definitions.get(resource_id, {})
+        if definition.get("type") != "port" or not source or source.get("type") not in {"resource.released", "resource.recovered"}:
+            continue
+        try:
+            port = int(definition.get("conflict_key", resource_id))
+            occupied = port_probe(port)
+        except (OSError, TypeError, ValueError):
+            facts["unknown"].append(
+                _recovery_fact(
+                    subject=resource_id,
+                    claim="resource.released",
+                    source_event=source_event,
+                    evidence_kind="port-probe",
+                    verified_at=now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+                    freshness="unknown",
+                    conclusion="unknown",
+                    blocking_scope=f"resource:{resource_id}",
+                    next_safe_action="re-run the registered port probe before reuse",
+                    required_loop="execution",
+                )
+            )
+            continue
+        if occupied:
+            facts["conflicts"].append(
+                _recovery_fact(
+                    subject=resource_id,
+                    claim="resource.released",
+                    source_event=source_event,
+                    evidence_kind="port-probe",
+                    verified_at=now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+                    freshness="fresh",
+                    conclusion="declared-released-but-port-occupied",
+                    blocking_scope=f"resource:{resource_id}",
+                    next_safe_action="reconcile port occupancy with the released lease before reuse",
+                    required_loop="governance",
+                )
+            )
+        else:
+            facts["observed"].append(
+                _recovery_fact(
+                    subject=resource_id,
+                    claim="resource.released",
+                    source_event=source_event,
+                    evidence_kind="port-probe",
+                    verified_at=now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+                    freshness="fresh",
+                    conclusion="port-free",
+                    next_safe_action="none",
+                    required_loop="execution",
+                )
+            )
+    return facts
+
+
+def _current_state_recovery_facts(
+    events: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
+    facts: dict[str, list[dict[str, Any]]] = {bucket: [] for bucket in RECOVERY_FACT_BUCKETS}
+    latest_work: dict[str, dict[str, Any]] = {}
+    latest_rule: dict[str, dict[str, Any]] = {}
+    block_sources: dict[str, dict[str, Any]] = {}
+    for event in events:
+        event_type = event.get("type", "")
+        if event_type.startswith("work."):
+            latest_work[event["subject"]] = event
+        if event_type.startswith("rule."):
+            latest_rule[event["subject"]] = event
+        if event_type == "work.blocked":
+            block_id = event.get("payload", {}).get("block_id") or f"block-{event['event_id']}"
+            block_sources[block_id] = event
+
+    for work_id, work in sorted(state["works"].items()):
+        source = latest_work.get(work_id)
+        facts["declared"].append(
+            _recovery_fact(
+                subject=work_id,
+                claim=f"work.status:{work['status']}",
+                source_event=source.get("event_id") if source else None,
+                freshness="current",
+                conclusion="declared",
+                blocking_scope=f"work:{work_id}",
+                next_safe_action=next_safe_action(work),
+                required_loop=(source.get("loop") if source else "governance"),
+            )
+        )
+
+    for rule_id, rule in sorted(state["rules"].items()):
+        source = latest_rule.get(rule_id)
+        facts["declared"].append(
+            _recovery_fact(
+                subject=rule_id,
+                claim=f"rule.status:{rule['status']}",
+                source_event=source.get("event_id") if source else None,
+                freshness="current",
+                conclusion="declared",
+                blocking_scope=f"rule:{rule_id}",
+                next_safe_action="inspect the active rule lifecycle before changing it",
+                required_loop="governance",
+            )
+        )
+
+    for block_id, block in sorted(state["blocks"].items()):
+        if not block.get("active"):
+            continue
+        source = block_sources.get(block_id)
+        facts["declared"].append(
+            _recovery_fact(
+                subject=block_id,
+                claim="block.active",
+                source_event=source.get("event_id") if source else None,
+                freshness="current",
+                conclusion="declared",
+                blocking_scope=block.get("scope") or f"work:{block.get('work_id')}",
+                next_safe_action=block.get("unblock_condition") or "satisfy the recorded unblock condition",
+                required_loop="governance",
+            )
+        )
+    return facts
+
+
+def _apply_runtime_recovery_conflicts(
+    paths: ProjectPaths,
+    facts: dict[str, list[dict[str, Any]]],
+) -> None:
+    observations: dict[tuple[str, str, str], list[tuple[str, str, dict[str, Any]]]] = {}
+    for fact in facts["observed"]:
+        if fact.get("evidence_kind") != "runtime-readback" or not isinstance(fact.get("evidence_id"), str):
+            continue
+        try:
+            document = load_evidence(paths, fact["evidence_id"])
+        except VoyageError:
+            continue
+        locator = document.get("locator", {})
+        environment_id = locator.get("environment_id")
+        target_version = locator.get("target_version")
+        fields = locator.get("fields")
+        if not isinstance(environment_id, str) or not isinstance(target_version, str) or not isinstance(fields, dict):
+            continue
+        for field, value in fields.items():
+            if not isinstance(field, str):
+                continue
+            key = (environment_id, target_version, field)
+            observations.setdefault(key, []).append((canonical_json(value), fact["evidence_id"], fact))
+
+    conflicted_ids: set[str] = set()
+    for (environment_id, target_version, field), items in sorted(observations.items()):
+        values = {value for value, _, _ in items}
+        if len(values) <= 1:
+            continue
+        evidence_ids = sorted({evidence_id for _, evidence_id, _ in items})
+        source_events = sorted({fact["source_event"] for _, _, fact in items if fact.get("source_event")})
+        verified_times = sorted({fact["verified_at"] for _, _, fact in items if fact.get("verified_at")})
+        conflicted_ids.update(evidence_ids)
+        facts["conflicts"].append(
+            _recovery_fact(
+                subject=f"environment:{environment_id}",
+                claim=f"runtime.field:{field}",
+                source_event=",".join(source_events) or None,
+                evidence_id=",".join(evidence_ids),
+                evidence_kind="runtime-readback",
+                verified_at=verified_times[-1] if verified_times else None,
+                freshness="fresh",
+                conclusion="conflicting-valid-observations",
+                blocking_scope=f"environment:{environment_id}/version:{target_version}/field:{field}",
+                next_safe_action="run an independent runtime readback and reconcile the conflicting observations",
+                required_loop="quality",
+            )
+        )
+    if conflicted_ids:
+        facts["observed"] = [item for item in facts["observed"] if item.get("evidence_id") not in conflicted_ids]
+
+
+def recovery_snapshot(
+    paths: ProjectPaths,
+    *,
+    now: datetime | None = None,
+    port_probe=probe_port,
+) -> dict[str, Any]:
+    checked_at = now or datetime.now(timezone.utc)
+    if checked_at.tzinfo is None:
+        raise VoyageError("recovery time must include timezone")
     state = current_state(paths)
     bootstrap = truth_status(paths)
+    events = load_events(paths.ledger)
+    facts = _evidence_recovery_facts(paths, events, state, now=checked_at)
+    resource_facts = _resource_recovery_facts(paths, events, state, now=checked_at, port_probe=port_probe)
+    state_facts = _current_state_recovery_facts(events, state)
+    for bucket in RECOVERY_FACT_BUCKETS:
+        facts[bucket].extend(resource_facts[bucket])
+        facts[bucket].extend(state_facts[bucket])
+    _apply_runtime_recovery_conflicts(paths, facts)
     works = []
     for work in sorted(state["works"].values(), key=lambda item: item["id"]):
         works.append(
@@ -1984,18 +2369,22 @@ def recovery_snapshot(paths: ProjectPaths) -> dict[str, Any]:
             }
         )
     active_blocks = [dict({"id": block_id}, **block) for block_id, block in state["blocks"].items() if block["active"]]
+    leases = active_leases(state, now=checked_at)
+    for bucket in RECOVERY_FACT_BUCKETS:
+        facts[bucket].sort(key=recovery_fact_sort_key)
     return {
         "project_root": str(paths.root),
         "project_stage": bootstrap["project_stage"],
         "bootstrap": bootstrap,
-        "validated_at": utc_now(),
+        "validated_at": checked_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "truth_registry": str(paths.truth_registry.relative_to(paths.root)),
         "ledger_head": state["last_event"],
         "work": works,
-        "active_leases": active_leases(state),
+        "active_leases": leases,
         "active_blocks": active_blocks,
         "rules": state["rules"],
-        "volatile_recheck_required": [lease["resource_id"] for lease in active_leases(state) if lease["stateful"] or lease["expired"]],
+        "volatile_recheck_required": [lease["resource_id"] for lease in leases if lease["stateful"] or lease["expired"]],
+        **facts,
     }
 
 
