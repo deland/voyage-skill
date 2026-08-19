@@ -1441,6 +1441,7 @@ def replay_events(
                 "risk_assessment": deepcopy(assessment) if assessment else None,
                 "status": "draft",
                 "delivery": None,
+                "quality": None,
                 "quality_actor": None,
                 "audit_checkpoint": None,
                 "previous_status": None,
@@ -1501,6 +1502,7 @@ def replay_events(
             _require(bool(evidence), "delivery requires evidence")
             attempt = 1 + (work["delivery"]["attempt"] if work["delivery"] else 0)
             work["delivery"] = {"anchor": anchor, "evidence": list(evidence), "actor": actor, "attempt": attempt, "event_id": event["event_id"]}
+            work["quality"] = None
             work["quality_actor"] = None
             work["audit_checkpoint"] = None
             work["status"] = "delivered"
@@ -1527,13 +1529,16 @@ def replay_events(
                     counts["failed"] > 0 or counts["unknown"] > 0,
                     "rejected quality requires failed or unknown checks",
                 )
-            state["gates"].setdefault(subject, {})["independent-quality"] = {
+            quality_result = {
                 "verdict": verdict,
                 "anchor": anchor,
                 "evidence": list(evidence),
                 "actor": actor,
                 "counts": counts,
+                "event_id": event["event_id"],
             }
+            work["quality"] = deepcopy(quality_result)
+            state["gates"].setdefault(subject, {})["independent-quality"] = quality_result
             work["status"] = "quality-passed" if verdict == "pass" else "rejected"
 
         elif event_type == "audit.checked":
@@ -3725,7 +3730,10 @@ def truth_status(paths: ProjectPaths) -> dict[str, Any]:
     else:
         next_action = "none"
     return {
+        "project_id": manifest["project_id"],
         "project_stage": stage,
+        "truth_registry": str(paths.truth_registry.relative_to(paths.root)),
+        "ledger_head": state["last_event"],
         "legacy": legacy,
         "required_domains": list(REQUIRED_TRUTH_DOMAINS),
         "missing_domains": missing,
@@ -4168,6 +4176,7 @@ def recovery_snapshot(
         facts[bucket].sort(key=recovery_fact_sort_key)
     return {
         "project_root": str(paths.root),
+        "project_id": bootstrap["project_id"],
         "project_stage": bootstrap["project_stage"],
         "bootstrap": bootstrap,
         "validated_at": checked_at.isoformat(timespec="seconds").replace("+00:00", "Z"),

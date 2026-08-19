@@ -1,0 +1,11 @@
+{
+  "coordination_boundary": "single-repository-single-machine",
+  "evidence": ".voyage/evidence",
+  "gates": ".voyage/gates.json",
+  "graph": ".voyage/graph.json",
+  "ledger": ".voyage/ledger/events.jsonl",
+  "project_id": "legacy-fixture",
+  "resources": ".voyage/resources.json",
+  "schema_version": "0.1.0",
+  "truth_registry": "docs/voyage/truth-registry.json"
+}

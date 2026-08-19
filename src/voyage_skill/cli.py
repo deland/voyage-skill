@@ -7,6 +7,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from . import __version__
+
 from .core import (
     VoyageError,
     activate_truth,
@@ -59,6 +61,7 @@ def common_evidence(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="voyage", description="VoyageSkill deterministic project control")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--root", default=".", help="Managed project root")
     sub = parser.add_subparsers(dest="command", required=True)
 

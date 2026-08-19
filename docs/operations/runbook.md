@@ -93,6 +93,57 @@ change.
 | `voyage work unblock` |
 <!-- voyage-cli-reference:end -->
 
+## Distribution operations
+
+Use either the **source-checkout Skill bundle** or an **installable CLI artifact**.
+From a checkout, invoke `python3 <voyage-skill>/scripts/voyage.py`;
+from an installed artifact, invoke `voyage`. Both must expose the same command
+contract and version. Build tools are explicit build prerequisites, not runtime
+dependencies of the installed CLI.
+
+Construct and verify candidate artifacts outside the source tree. Preserve the
+source commit, artifact digest, interpreter, complete test totals, and raw
+command output. Never treat a wheel, archive, generated report, or successful
+test as project truth.
+
+Build one exact commit with a fixed non-negative timestamp into a new external
+directory, then install the reported wheel without an index or dependency
+resolution:
+
+```bash
+python3 scripts/voyage-build.py --source . --output <external-new-directory> --revision <full-commit> --source-date-epoch <epoch>
+python3 -m venv <external-venv>
+<external-venv>/bin/python -m pip install --no-index --no-deps <reported-wheel>
+<external-venv>/bin/voyage --version
+<external-venv>/bin/voyage --help
+```
+
+The builder reads package and source files from the commit, verifies wheel
+RECORD hashes and the console entry point, emits wheel/source SHA-256 values,
+and rejects an output directory inside the checkout before mutation. Rebuild
+with the same commit and epoch to compare byte-identical digests. Treat a
+missing Git commit, non-repository source, existing output directory, changed
+digest, missing RECORD, or wrong entry point as a failed candidate.
+
+Stop after local verification. Uploading, tagging, signing, or creating any
+remote release requires separate scoped User authorization; PLAN-0002 does not
+grant publication authority.
+
+For a local candidate, retain raw output descriptors for exactly
+`repository-tests`, `skill-validation`, `dogfood-validation`,
+`external-journeys`, and `upgrade-recovery`; every count must be passed with
+zero failed, skipped, or unknown. Create and independently verify the disposable
+content-addressed report:
+
+```bash
+python3 scripts/voyage-release.py create --source . --artifacts <artifact-dir> --checks <checks.json> --output <new-external-dir> --revision <full-commit>
+python3 scripts/voyage-release.py verify --source . --artifacts <artifact-dir> --checks <checks.json> --manifest <release-evidence.json>
+```
+
+The report is local evidence only. Deleting and rebuilding it from immutable
+inputs must restore the same ID. Stop after verification; any external
+publication still requires separate User authorization.
+
 ## Bootstrap and truth activation
 
 `voyage init` creates a `bootstrap` project. Generated product, governance,
@@ -112,6 +163,12 @@ Inspect the exact sources and gaps:
 voyage --root <project> truth list
 voyage --root <project> truth status
 ```
+
+Both `truth status` and `recover` read the persisted project ID, truth-registry
+path, and current ledger head; use those fields to confirm that a new process
+has reopened the intended project. `status --full` retains the independent
+quality verdict, actor, exact delivery anchor, typed evidence IDs, complete
+counts, and source event alongside the effective mandatory-gate result.
 
 Record a User-loop `decision.recorded` event whose payload scope contains the
 project ID, action `truth.activate`, and exact source IDs. Then activate each
@@ -138,6 +195,21 @@ voyage --root <project> truth migrate --decision <decision-id> --actor <governan
 Migration appends confirmation evidence and adds the operational stage; it does
 not rewrite earlier ledger events. Do not use migration to bypass a new
 bootstrap project's per-source activation.
+
+## Historical fixture and upgrade readback
+
+Treat `tests/fixtures/history/catalog.json` as test-only historical fixture
+evidence. Verify its per-file SHA-256 values, then run `validate`, `truth
+status`, and `recover` from the candidate installed CLI. A read-compatible
+explicit fixture requires no migration. A user-migratable legacy fixture must
+remain `legacy-bootstrap` until the User records an exact `truth.migrate`
+decision and governance runs the command above.
+
+After migration, prove that the new ledger is an append-only prefix extension
+of the pre-migration ledger. Stop on damaged input, digest drift, an
+`unknown-future` schema/evidence version, an initialization argument mismatch,
+or unsupported writer capability. Do not repair, normalize, activate truth,
+promote evidence, enable extensions, or reduce risk as part of readback.
 
 ## Extension operations
 

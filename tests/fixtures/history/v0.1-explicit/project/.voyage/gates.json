@@ -1,0 +1,11 @@
+{
+  "gates": [
+    {
+      "allow_skips": false,
+      "id": "independent-quality",
+      "mandatory": true,
+      "required_loop": "quality"
+    }
+  ],
+  "schema_version": "0.1.0"
+}

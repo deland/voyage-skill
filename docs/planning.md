@@ -1968,3 +1968,714 @@ active → retired | superseded
 - Repository readback: the anchor contains 10 changed files with 1,316 insertions and 21 deletions; `SKILL.md` remains progressively disclosed at 112 lines; the dependency-free equivalent skill validator and repository metadata tests pass
 - Remaining issues: the official `quick_validate.py` remains unknown because its external Python environment lacks PyYAML; snapshot review remains intentionally deferred unless a future valid 100,000-event sample reaches a fixed threshold and a separate User-approved work item is opened
 - Next safe action: commit and push this append-only CLOSE record, verify the remote branch head, then review PLAN-0001 for merge or release; do not add another permanent-kernel feature without a new planned and authorized work item
+
+---
+
+## 2026-08-19 · PLAN-0001 · CLOSE
+
+- Status: complete and merged
+- Baseline: `cf9f465644154881738ffbb4bf08c9bf08f888d8`
+- Anchor: `afb34f4e5cb155643477f6f76b1334736b7de9ef`
+- Supersedes: PLAN-0001 active status only; all prior plan, START, UPDATE, and CLOSE records remain authoritative history
+- Scope: formally close the minimal-kernel convergence plan after MK-000, MK-101, MK-102, MK-103, MK-104, MK-201, MK-202, MK-301, and MK-302 were completed, reviewed, fast-forward merged, pushed, and read back from remote `main`
+- Non-goals: no new kernel feature, extension enablement, snapshot, platform adapter, release artifact, branch deletion, or PLAN-0002 scope is introduced by this closure
+- Risk: light; this record reconciles completed immutable delivery state and does not change runtime behavior or external project state
+- Dependencies: all nine child work CLOSE records, implementation anchors, delivery-record commits, final branch review, clean worktrees, and remote `main` readback satisfied
+- Acceptance gates: every PLAN-0001 Work ID has one append-only CLOSE record; `main`, `origin/main`, `xp/plan-minimal-kernel`, and its remote branch resolve to the merged delivery head before this planning append; 324 repository tests, compileall, dogfood validate, CLI reference, dependency-free metadata validation, and official `quick_validate.py` pass; planning remains append-only
+- Actual result: PASS; the complete 19-commit delivery series was reviewed without blocking findings and fast-forward merged from `cf9f465644154881738ffbb4bf08c9bf08f888d8` to `afb34f4e5cb155643477f6f76b1334736b7de9ef`; remote `main` and the retained development branch both read back the merged SHA
+- Tests: all 324 repository tests passed with 0 failures, 0 errors, and 0 skips against the merged tree; compilation, repository dogfood validation, deterministic CLI reference, append-only planning checks, equivalent Skill metadata validation, and the official skill-creator validator passed
+- Readback: the project is operational with six activation-verified truth sources, no missing domain, no unverified active source, zero active blocks or leases, zero unknown or conflicting recovery facts, Darwin `fcntl` append-safe writes, and explicitly non-cryptographic local-caller actor identity
+- Remaining issues: no authorized PLAN-0001 implementation remains; legacy truth activation evidence remains declared rather than typed-observed but does not block the operational project; snapshot work remains prohibited below the fixed threshold; any new permanent-kernel or extension work requires a new appended plan and User authority
+- Next safe action: commit and push this append-only plan closure on the development branch, then ask the User to authorize a PLAN-0002 objective before starting further product development
+
+---
+
+## 2026-08-19 · PLAN-0002 · 真实项目接入与发布加固
+
+### 记录状态
+
+- Status: active
+- Baseline: `1bba25b6a4b5b309c82ed1a0c59e6f996f0c9a92`
+- Branch: `xp/plan-real-world-hardening`
+- Authority: User explicitly authorized PLAN-0002 on 2026-08-19
+- Supersedes: none; PLAN-0001 remains complete
+- Objective: prove that VoyageSkill can be built, installed, invoked, adopted, upgraded, recovered, and accepted from clean external project contexts without conversation memory, repository-local imports, fabricated evidence, or permanent-kernel expansion
+
+### 固定产品决策
+
+1. PLAN-0002 hardens two distinct delivery surfaces: a source-checkout Skill bundle containing the stable entry and deterministic scripts, and an installable Python CLI artifact exposing `voyage`.
+2. Build dependencies and runtime dependencies are separate claims. The installed runtime must retain zero third-party dependencies; a source build may require declared build tooling and must fail with a clear prerequisite message when it is absent.
+3. External-journey acceptance uses fresh temporary Git repositories, separate CLI processes, unrelated working directories, sanitized `PYTHONPATH`, and only persisted project files plus command readback between steps.
+4. Tests must not promote fixtures, generated reports, build directories, wheel contents, or release manifests into project truth. Disposable artifacts remain deletable and reproducible from a commit.
+5. Upgrade coverage validates the current reader against explicit historical fixture contracts and proves no silent ledger rewrite, truth activation, evidence promotion, extension enablement, or risk reduction.
+6. Release evidence binds source commit, artifact digest, interpreter, test totals, Skill validation, dogfood validation, and external-journey results. A report is evidence, not authority to publish.
+7. Publishing packages, creating remote releases or tags, signing artifacts, deleting branches, enabling optional extensions, adding providers, adding Windows locking, or changing the supported one-machine trust boundary requires separate User authorization and is outside PLAN-0002.
+8. No new permanent graph node, edge, durable state, mandatory gate, or background service may be added. A newly discovered need must first be recorded as a finding and separately authorized.
+
+### 执行顺序
+
+| 顺序 | Work ID | 优先级 | 目标 | 依赖 |
+| --- | --- | --- | --- | --- |
+| 0 | RW-000 | P0 | 建立发行契约守卫与黑盒测试基座 | PLAN-0002 |
+| 1 | RW-101 | P0 | 构建、安装和入口点制品可复现 | RW-000 |
+| 2 | RW-102 | P0 | 全新项目与采用项目的外部黑盒旅程 | RW-101 |
+| 3 | RW-103 | P1 | 历史项目升级、跨会话恢复与失败原子性 | RW-102 |
+| 4 | RW-201 | P1 | 生成可验证的本地发布证据包与验收报告 | RW-101～RW-103 |
+
+### RW-000 · 发行契约守卫与黑盒测试基座
+
+范围：
+
+- 新增发行契约决策，明确 Skill bundle、CLI artifact、构建依赖、运行时依赖、版本和发布授权边界；
+- 建立只使用 Python 标准库的隔离复制、子进程、venv、文件摘要和工作树突变检测测试基座；
+- 增加静态契约测试，锁定单一版本、Python 下限、console entry point、零运行时依赖和 Skill 元数据；
+- 记录当前干净环境安装失败的真实基线，不在本工作包中伪造成功制品。
+
+非目标：不修复构建、不新增 `--version`、不执行完整外部项目旅程、不创建发布制品、不改运行时状态机。
+
+验收：发行决策进入 active decisions 真源；测试基座自身有正负用例；静态分发合同与当前文件一致；完整回归和 dogfood 不退化。
+
+### RW-101 · 构建、安装与入口点制品
+
+范围：
+
+- 从干净提交构建 wheel 和 source archive，输出到源树之外；
+- 检查制品内容、版本、许可证、Python 下限、入口点和依赖元数据；
+- 将 wheel 安装到无项目源码、无 `PYTHONPATH` 的全新 venv，从无关目录运行 `voyage --help`、`validate` 和 `recover`；
+- 提供确定性 `--version` 读回，并防止 package metadata、模块版本和 CLI 版本漂移；
+- 明确源码安装所需构建工具，不能把联网下载当成测试成功的隐含前提。
+
+非目标：不发布 PyPI、不承诺所有 Python/OS 组合、不把开发文档、研究输入、tests 或 dogfood ledger 塞入 CLI wheel。
+
+验收：本地构建脚本实际运行；wheel 在全新 venv 中离线安装；installed console 与 source-checkout script 的命令交换一致；源树无生成残留。
+
+### RW-102 · 全新与采用项目的外部黑盒旅程
+
+范围：
+
+- 只通过安装后的 `voyage` 子进程完成全新项目 init、draft 审阅、User decision、四领域 activate、work/resource/delivery/quality/accept/close 和冷恢复；
+- 在另一个已有 Git 项目中采用自定义 truth registry，验证项目 ID、路径、激活和不覆盖边界；
+- 每一步在新进程和不相关 cwd 中执行，状态只从磁盘与命令读回恢复；
+- 对交付 commit、命令结果、runtime readback、User decision 和资源探测使用真实类型化证据。
+
+非目标：不调用 Python core 绕过 CLI，不模拟生产部署，不启用可选扩展，不使用 dogfood 仓库账本作为测试夹具。
+
+验收：两条旅程从零开始通过；执行者不能自审；错误锚点、错误决策 scope、资源冲突和 bootstrap 越权均在子进程边界被拒绝且无半写入。
+
+### RW-103 · 升级、跨会话恢复与失败原子性
+
+范围：
+
+- 建立最小、人工可审计的 historical fixture manifests/ledgers，并标明来源版本与摘要；
+- 验证 legacy migration、当前显式扩展模式和未来未知版本的接受/拒绝边界；
+- 在进程中断、过期租约、损坏证据、账本尾部损坏、缺锁后端和 init marker 存在时验证下一安全动作；
+- 比较操作前后文件摘要，证明失败不会静默重写账本、真源、资源或 manifest。
+
+非目标：不自动升级未知格式，不引入快照/数据库，不提供 Windows writer，不声称抵御同账号恶意写者。
+
+验收：支持的历史 fixture 可恢复或显式迁移；未知版本 fail closed；所有负向场景有确定性 JSON、退出码、最小阻塞范围和零越权突变。
+
+### RW-201 · 本地发布证据与验收报告
+
+范围：
+
+- 生成内容寻址的本地 release evidence manifest，引用 commit、wheel/source digest、版本、平台、Python、测试计数和外部旅程结果；
+- 对报告进行独立 readback，拒绝缺失制品、摘要漂移、错误 commit、测试 unknown/skip 或 Skill/dogfood 未通过；
+- 在 active runbook 中记录可重复的本地候选发布流程和 User-controlled 外部发布停止点；
+- 保持 SKILL.md 只提供发现与停止条件，把详细发布流程留在 active operations truth。
+
+非目标：不创建远端 tag/release、不上传包、不签名、不生成 changelog/安装指南等额外 Skill 文件、不改变 User 最终授权。
+
+验收：同一 commit 与相同输入产生规范化证据；任一制品或报告字段变化都会失败；删除报告后可从不可变输入重建；发布动作在 User 授权前停止。
+
+### PLAN-0002 统一门禁
+
+每个 Work ID 必须遵守：先追加 START 与完整测试矩阵，捕获预期红灯，再逐子任务实现并测试；实现提交成为不可变锚点后才追加 CLOSE。每次完整验收至少包含 focused tests、全仓回归、compileall、dogfood validate/truth/recover、CLI reference、官方 Skill validator、源树清洁度和远端水位读回。测试结果必须报告 pass/fail/skip/unknown，不能只写“成功”。
+
+### 当前基线读回
+
+- PLAN-0001 已完整合并，当前仓库有 324 个通过测试，官方 Skill validator、dogfood validate 和 CLI reference 均通过。
+- `pyproject.toml` 声明 `setuptools>=61`，当前宿主为 setuptools 58.0.4，且没有 `build` 模块；这些是构建环境事实，不是运行时依赖结论。
+- 在全新本地克隆与隔离 venv 中执行 `pip install --no-build-isolation --no-deps <source>`，因缺少 `bdist_wheel` 确定性失败；当前没有测试证明 README 中的安装声明。
+- 源码 checkout script 可定位自身 `src`，但尚无无关 cwd、净化环境、安装后 console、artifact contents、版本交换或完整外部旅程验收。
+
+### 下一立即动作
+
+执行 RW-000。先追加 DEV-0010 START 测试矩阵并提交计划基线，再添加测试文件、捕获红灯，最后才实现发行决策和黑盒测试基座。
+
+---
+
+## 2026-08-19 · DEV-0010 · RW-000 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `1bba25b6a4b5b309c82ed1a0c59e6f996f0c9a92`
+- Anchor: pending
+- Supersedes: none
+- Scope: add a registered release-contract decision, static distribution guards, and a reusable standard-library black-box harness for isolated source copies, subprocesses, venvs, digests, and mutation readback
+- Non-goals: no build fix, wheel/source artifact, CLI `--version`, external lifecycle journey, historical fixture, release manifest, remote publication, extension enablement, or runtime state-machine change
+- Risk: light; tests and active contracts only, with all generated inputs confined outside the repository
+- Dependencies: PLAN-0002 User authority, PLAN-0001 merged delivery, clean `1bba25b` baseline, current packaging files and Skill metadata
+- Acceptance gates: all tests below are added before implementation and expose only the documented contract/harness gaps; every harness negative case is deterministic; complete regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, planning append-only check, and diff hygiene pass
+- Actual result: pending
+- Tests: 12 methods defined below; not run yet
+- Readback: clean-source install baseline fails at missing `bdist_wheel`; package version is 0.1.0, console entry is `voyage = voyage_skill.cli:main`, runtime dependency declaration is empty, and `SKILL.md` is 112 lines
+- Remaining issues: D-0003 and active distribution authority are absent; no repository-owned isolated-distribution harness or guards exist
+- Next safe action: commit and push this planning baseline, then add all 12 RW-000 tests without product edits and capture the expected red result
+
+### ST-0001 · 发行静态合同
+
+实现前测试用例：
+
+1. `packaging_metadata_has_one_version_and_supported_python_floor`：setup metadata 与模块版本一致，Python 下限明确为 3.9，不能存在第二个隐式版本。
+2. `console_entrypoint_and_source_script_target_the_same_cli`：console entry point、`python -m voyage_skill` 和 checkout script 都进入同一个 CLI main。
+3. `runtime_dependency_contract_is_empty_and_build_requirements_are_explicit`：运行时依赖为空，构建依赖单独声明且不会被文档称为运行时依赖。
+4. `skill_metadata_is_valid_progressive_and_distribution_neutral`：Skill 官方校验可通过、保持精简，并能发现 installed console 或 checkout script 而不绑定本仓库绝对路径。
+5. `release_contract_decision_is_registered_and_active`：D-0003 存在、active，并由 decisions 真源索引。
+6. `active_truth_defines_two_distribution_surfaces_and_user_publish_boundary`：product/operations/decision 对 Skill bundle、CLI artifact 和 User-controlled publish 停止点一致。
+
+### ST-0002 · 标准库黑盒测试基座
+
+实现前测试用例：
+
+1. `isolated_source_copy_contains_only_tracked_commit_files`：隔离源复制绑定 commit，只包含 tracked 内容，不携带 worktree 修改、缓存或构建残留。
+2. `black_box_environment_removes_pythonpath_and_uses_unrelated_cwd`：子进程环境移除 `PYTHONPATH/PYTHONHOME`，cwd 位于源树和目标项目之外。
+3. `black_box_runner_captures_argv_exit_stdout_stderr_and_duration`：runner 保存完整 argv、退出码、原始输出与非负时长，不把过滤文本当证据。
+4. `black_box_runner_reports_timeout_without_orphan_success`：超时产生确定性失败和原始诊断，不伪造 exit 0。
+5. `tree_digest_detects_generated_or_mutated_source_files`：tracked/untracked 文件新增、删除或改变均能被摘要与清单读回发现。
+6. `temporary_distribution_workspace_is_outside_repository_and_disposable`：测试工作区不位于仓库内，清理后无项目文件或环境状态残留。
+
+### DEV-0010 执行顺序
+
+1. 添加 12 个测试及最小测试 helper 声明，不修改产品/正式文档；运行并记录红灯分类。
+2. 先实现 ST-0002 测试基座，使其 6/6 通过；运行已有 324 项回归。
+3. 实现 D-0003、决策索引和必要的 active product/operations/Skill 最小合同，使 ST-0001 6/6 通过。
+4. 运行 12 项 focused、全仓、compileall、dogfood、CLI reference 和官方 Skill 校验。
+5. 创建实现提交作为不可变锚点，在其上重跑门禁，再追加 DEV-0010 CLOSE。
+
+---
+
+## 2026-08-19 · DEV-0010 · RW-000 · UPDATE
+
+- Status: in-progress; complete red baseline captured
+- Baseline: `417db699f87d0f768a4771a849c8759d601bf924`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 12 DEV-0010 tests and the six declared black-box helper interfaces were added before product or active-contract implementation
+- Non-goals: unchanged
+- Risk: light
+- Dependencies: DEV-0010 START test matrix
+- Acceptance gates: the focused suite must distinguish already-valid packaging metadata from absent distribution authority and absent helper behavior; test-design defects must be corrected before implementation
+- Actual result: expected FAIL; after correcting two test-expression defects without product changes, 12 tests produced 3 passes, 3 assertion failures, and 6 errors
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_distribution -v`
+- Readback: version/Python floor, common CLI main, and empty runtime dependency declaration already pass; D-0003 and the active two-surface/User-publication contract are absent; Skill only documents the checkout script; all six standard-library helper interfaces raise their planned `NotImplementedError`
+- Remaining issues: implement ST-0002 helpers, then D-0003 and the minimum active distribution wording for ST-0001
+- Next safe action: implement only `tests/distribution_support.py`, run all six DistributionHarnessTests, then rerun the 324 pre-PLAN-0002 regression tests before editing active contracts
+
+---
+
+## 2026-08-19 · DEV-0010 · RW-000 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `417db699f87d0f768a4771a849c8759d601bf924`
+- Anchor: pending
+- Supersedes: DEV-0010 START test-count field only; the original 12-case matrix remains unchanged and one supplemental drift guard is additive
+- Scope: ST-0001 and ST-0002 implemented; D-0003 fixes the two distribution surfaces and publication authority, active product/operations truth and Skill expose the minimum contract, and the standard-library black-box harness provides commit-only source copies, sanitized subprocesses, complete results, timeouts, tree snapshots, and disposable external workspaces
+- Non-goals: unchanged; no build fix, artifact, `--version`, external lifecycle journey, historical fixture, release report, publication, extension, or runtime state transition was added
+- Risk: light; all generated files remain outside the repository and active contract edits are bound to the User-authorized PLAN-0002 scope
+- Dependencies: complete red baseline, corrected test expressions, ST-0002 6/6, 324 pre-PLAN-0002 regression pass, and D-0003 satisfied
+- Acceptance gates: 13 focused tests, 337 complete tests, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, planning append-only history, no generated source residue, and diff hygiene
+- Actual result: PASS before commit; focused 13/13 and full 337/337 passed with 0 failures, 0 errors, and 0 skips; compileall, dogfood, CLI reference, official Skill validation, and diff check passed
+- Tests: the original 12 tests first produced 3 passes, 3 failures, and 6 errors; ST-0002 then passed 6/6 and all prior 324 tests passed; a final truth readback exposed decision index version 3 versus registry version 2, so `decision_index_version_matches_registered_truth_version` was added before its fix, failed 2 != 3, and passed after registry convergence
+- Readback: truth is operational with six activation-verified sources and decision-log version 3; recovery has zero unknown/conflicts/blocks/leases; `SKILL.md` remains progressively disclosed at 114 lines; the source-install baseline remains intentionally unfixed for RW-101
+- Remaining issues: create and verify the immutable RW-000 implementation commit, append CLOSE, then begin RW-101 with a complete artifact build/install test matrix
+- Next safe action: commit the RW-000 implementation, rerun all 13 focused and 337 repository tests plus acceptance gates against the exact SHA, then append DEV-0010 CLOSE
+
+---
+
+## 2026-08-19 · DEV-0010 · RW-000 · CLOSE
+
+- Status: complete
+- Baseline: `417db699f87d0f768a4771a849c8759d601bf924`
+- Anchor: `533cb7b1526b2868423bb1f58f0a6cb87773fa61`
+- Supersedes: none
+- Scope: delivered the registered D-0003 distribution authority, active two-surface product and operations contract, distribution-neutral Skill entry, version-converged decisions truth, and reusable standard-library black-box distribution test harness
+- Non-goals: unchanged; no packaging build repair, wheel/source artifact, CLI version command, external project lifecycle, historical upgrade fixture, release evidence manifest, remote publication, extension enablement, or runtime state-machine change was introduced
+- Risk: light; the exact anchor changes contracts and tests only, confines generated work outside the repository, and preserves User publication authority
+- Dependencies: PLAN-0002 and DEV-0010 START, complete red baseline, ST-0002 6/6, 324 prior-test regression, supplemental truth-version red guard, and implementation-complete UPDATE satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 13 focused tests, complete 337-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, decision truth version readback, planning append-only history, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 13 RW-000 tests and all 337 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional acceptance gate passed
+- Tests: initial 12-test red was 3 pass, 3 fail, 6 errors; the helper subtask passed 6/6 and all prior 324 tests; the additive decision-version test failed on registry 2 versus index 3 before its fix; final focused and full suites passed against the exact commit
+- Readback: project stage is operational; all six truth sources are activation-verified; decision-log reads version 3; recovery reports zero unknown, conflicts, blocks, or leases; `SKILL.md` is 114 lines and official validation passes; no build artifact or temporary environment exists in the source tree
+- Remaining issues: the clean source-install baseline still fails without wheel build tooling by design; RW-101 must define and implement the artifact build/install contract before README installation claims are accepted as proven
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-000 anchor, then start RW-101 with its complete test matrix before changing packaging or CLI behavior
+
+---
+
+## 2026-08-19 · DEV-0011 · RW-101 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `4e6aa733ee5149d63e4208ddfcf18a69deed3485`
+- Anchor: pending
+- Supersedes: none
+- Scope: build reproducible wheel and source-checkout artifacts outside the repository, inspect their contents and digests, add deterministic version readback, install the wheel without network into a clean venv, and prove installed/source entry-point parity from unrelated working directories
+- Non-goals: no package upload, remote tag/release, signature, external project full lifecycle, historical migration fixture, optional extension, runtime state change, README expansion, or third-party runtime dependency
+- Risk: standard; malformed artifacts or misleading version/dependency metadata could create an unverifiable delivery surface, but all writes remain disposable and local
+- Dependencies: RW-000 distribution authority and black-box harness, clean local/remote baseline above
+- Acceptance gates: all tests below are added before implementation and expose absent builder/version/artifact behavior; each subtask passes before the next; final 351-test-or-later regression, compileall, dogfood, CLI reference, official Skill validation, artifact install/readback, clean source tree, and diff hygiene pass
+- Actual result: pending
+- Tests: 14 methods defined below; not run yet
+- Readback: current source installation in a clean venv fails without `bdist_wheel`; no repository-owned artifact builder or inspector exists; CLI has no deterministic `--version`; runtime dependencies remain empty
+- Remaining issues: all ST-1011 through ST-1013 work remains
+- Next safe action: add the 14 tests without product changes, capture the red baseline, then implement ST-1011 only
+
+### ST-1011 · 确定性制品构建与检查
+
+1. `cli_version_matches_module_and_package_metadata`：checkout script 和 `python -m voyage_skill` 的 `--version` 与单一模块/包版本一致。
+2. `builder_emits_wheel_and_source_archive_outside_source_tree`：精确 commit 构建两个规范命名制品，输出目录必须在源树外。
+3. `repeated_builds_are_byte_identical`：同 commit、版本和时间输入重复构建得到相同 SHA-256。
+4. `wheel_contains_only_runtime_license_metadata_and_entrypoint`：wheel 只含 runtime package、license、METADATA/WHEEL/RECORD/entry_points，不含 tests、docs、research、ledger 或 release report。
+5. `source_archive_is_commit_bound_and_excludes_worktree_changes`：source bundle 只含目标 commit tracked 文件，忽略未提交修改并记录 commit。
+
+### ST-1012 · 隔离安装与入口一致性
+
+1. `wheel_installs_offline_without_dependencies_in_clean_venv`：使用 `--no-index --no-deps` 安装 wheel，元数据 Requires-Dist 为空。
+2. `installed_console_runs_from_unrelated_cwd_without_pythonpath`：净化环境和无关 cwd 中 `voyage --help` 成功。
+3. `installed_console_and_module_report_identical_version`：installed `voyage --version` 与 venv `python -m voyage_skill --version` 完全一致。
+4. `installed_cli_initializes_validates_and_recovers_external_bootstrap`：安装后的 CLI 对全新外部项目完成 init/validate/recover，不依赖源码目录。
+5. `build_and_install_leave_source_tree_unchanged`：构建、venv、pip 缓存和运行产物均不写入 source tree。
+
+### ST-1013 · 失败边界与正式操作合同
+
+1. `builder_rejects_output_inside_source_tree_before_mutation`：源树内输出路径零修改拒绝。
+2. `builder_rejects_unknown_revision_and_non_repository`：未知 commit 或非 Git 目录确定性失败且无半制品。
+3. `artifact_inspector_rejects_tampered_or_incomplete_wheel`：摘要变化、RECORD 缺失或 entry point 错误均失败。
+4. `active_runbook_documents_local_build_install_verify_and_publish_stop`：正式 operations truth 记录可重复命令、离线安装读回和 User publication 停止点，Skill 不复制长流程。
+
+### DEV-0011 执行顺序
+
+1. 添加全部 14 项测试，运行并记录预期失败。
+2. 实现标准库 builder/inspector、脚本和 `--version`，先通过 ST-1011 与 ST-1013 构建边界。
+3. 使用真实 wheel、clean venv、无网络安装通过 ST-1012。
+4. 更新 active runbook 与生成的 CLI reference；保持 Skill 入口精简。
+5. 完整回归后创建不可变实现提交，复验、追加 CLOSE、推送并读回远端。
+
+---
+
+## 2026-08-19 · DEV-0011 · RW-101 · UPDATE
+
+- Status: in-progress; complete red baseline captured
+- Baseline: `82c259b11cb8bccdb2b284275662365c4d541962`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 14 artifact tests were added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0011 START
+- Acceptance gates: failures must map to missing builder, inspector, script, version exchange, installation behavior, and runbook detail rather than unrelated regressions
+- Actual result: expected FAIL; 14 tests ran with 0 passes, 5 assertion failures, and 9 errors
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_distribution_artifacts -v`
+- Readback: `voyage_skill.distribution` and `scripts/voyage-build.py` are absent; `--version` falls through to the required-command error; runbook has the authority boundary but not executable local build/install steps
+- Remaining issues: all ST-1011 through ST-1013 implementation remains
+- Next safe action: implement commit-bound deterministic wheel/source builders, strict wheel inspection, build script, CLI version, and negative output/revision guards before running installation tests
+
+---
+
+## 2026-08-19 · DEV-0011 · RW-101 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `82c259b11cb8bccdb2b284275662365c4d541962`
+- Anchor: pending
+- Supersedes: none
+- Scope: deterministic standard-library wheel/source builder and strict wheel inspector, executable checkout build script, common CLI `--version`, offline clean-venv install/readback, and active local candidate operations are implemented
+- Non-goals: unchanged; no external publication, remote tag/release, signature, full lifecycle journey, upgrade fixture, extension, runtime state change, or third-party runtime dependency
+- Risk: standard; builder reads only an exact Git commit, emits outside the source tree, verifies RECORD/entry point/digest, and cleans a failed new output directory
+- Dependencies: complete 0-pass red baseline, canonical-path test correction, ST-1011/ST-1013 9/9 except planned runbook gap, ST-1012 5/5 real install, and final runbook convergence satisfied
+- Acceptance gates: 14 focused tests, complete 351-test regression, compileall, dogfood validate, CLI reference, official Skill validation, source-tree cleanliness, and diff hygiene
+- Actual result: PASS before commit; focused 14/14 and full 351/351 passed with 0 failures, 0 errors, and 0 skips; all other gates passed
+- Tests: wheel installs with `--no-index --no-deps` in a new venv, installed console and module versions match, external bootstrap init/validate/recover succeeds, repeated artifacts are byte-identical, dirty worktree content is excluded, and negative revision/output/tamper cases fail without source mutation
+- Readback: wheel contains only runtime Python, license and dist-info metadata with no Requires-Dist; source archive carries a versioned commit manifest; build/install produces no repository artifact; the original clean-source pip failure remains correctly classified as missing build tooling rather than a runtime dependency
+- Remaining issues: create the immutable commit and use its exact SHA to run the builder from the checkout, compare two artifact builds, install one wheel, and rerun all gates before CLOSE
+- Next safe action: commit RW-101, build and install exact-anchor artifacts outside the source tree, rerun 14 focused and 351 full tests, then append CLOSE
+
+---
+
+## 2026-08-19 · DEV-0011 · RW-101 · CLOSE
+
+- Status: complete
+- Baseline: `82c259b11cb8bccdb2b284275662365c4d541962`
+- Anchor: `9e147a08d4d4b0c20ac14595ee61867da1122a7e`
+- Supersedes: none
+- Scope: delivered deterministic commit-bound wheel and source artifacts, strict artifact inspection, common version readback, offline clean-venv installation, installed/source entry-point parity, and the local candidate build/install/verify operations contract
+- Non-goals: unchanged; no package upload, remote tag/release, signature, external project full lifecycle, historical migration fixture, optional extension, or runtime state-machine change was introduced
+- Risk: standard; the exact anchor reads a named commit, writes only outside the source tree, verifies artifact contents and digests, and leaves publication under explicit User authority
+- Dependencies: DEV-0011 START, complete 0-pass red baseline, implementation-complete UPDATE, and exact-anchor artifact/readback verification satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 14 focused tests, complete 351-test regression, compileall, dogfood validate, CLI reference, official Skill validator, two independent artifact builds, offline wheel installation, installed entry-point readback, source-tree cleanliness, and diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 14 RW-101 tests and all 351 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional acceptance gate passed
+- Tests: exact-anchor wheel installed with `pip install --no-index --no-deps` into `/tmp/voyage-rw101-venv-9e147a0`; installed `voyage --version` and `python -m voyage_skill --version` both returned `voyage 0.1.0`; installed `--help` succeeded from an unrelated working directory
+- Readback: builds in `/tmp/voyage-rw101-anchor-a-9e147a0` and `/tmp/voyage-rw101-anchor-b-9e147a0` were byte-identical; wheel size 54,099 bytes and SHA-256 `90477c11ec2c35882cffc416d1eef982b717c7a21b39ed85a49fbd0a0b8b81fd`; source archive size 235,566 bytes and SHA-256 `8a01801ab356194032e043f61e92f552662c158294477c826c3f36e16bc98542`; no artifact or environment was created in the source tree
+- Remaining issues: artifact construction and installation are proven, but RW-102 must prove the installed product through complete fresh-project and adopted-project black-box journeys using real immutable evidence and failure boundaries
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-101 anchor, then start RW-102 with its complete test matrix before changing journey behavior
+
+---
+
+## 2026-08-19 · DEV-0012 · RW-102 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `271289b7714d3c21e84b0fd50576ed54e454fdad`
+- Anchor: pending
+- Supersedes: none
+- Scope: prove fresh-project and adopted-project journeys using only an installed RW-101 wheel, independent CLI processes, unrelated working directories, persisted project files, real Git commits, typed evidence, resource controls, and cold command readback
+- Non-goals: no Python core calls from journey tests, production deployment, optional extension enablement, dogfood-ledger fixture reuse, package publication, remote release/tag/signature, new permanent graph type, or unrelated README expansion
+- Risk: standard; the work exercises the complete authority and evidence path from an external process boundary, and any partial write or source-tree dependency would invalidate the distribution claim
+- Dependencies: RW-101 immutable artifact/install contract and remote CLOSE at the baseline above
+- Acceptance gates: all tests below are added before product implementation and expose only external-journey contract gaps; every subtask passes before the next; final focused suite, full repository regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, clean source tree, and diff hygiene pass
+- Actual result: pending
+- Tests: 19 methods defined below; not run yet
+- Readback: installed CLI currently proves only init/validate/recover of an unreviewed bootstrap; no installed-process test completes truth activation, real delivery evidence, resource ownership, adoption, negative authority cases, or cold closed-work recovery
+- Remaining issues: all ST-1021 through ST-1024 work remains
+- Next safe action: add all 19 tests and their external-only harness without product changes, capture the red baseline, then implement ST-1021 only
+
+### ST-1021 · Installed-process fresh bootstrap and session independence
+
+1. `installed_runner_has_no_source_path_or_pythonpath`：wheel-installed console runs from unrelated cwd with a sanitized environment whose argv, PATH, cwd and module locations do not reference the source checkout.
+2. `fresh_init_creates_drafts_and_bootstrap_readback`：new Git project init creates only bootstrap truth drafts and reports bootstrap through a new process.
+3. `reviewed_drafts_require_user_decision_before_activation`：edited/reviewed drafts remain inactive until a persisted User decision exists; governance cannot substitute its own decision.
+4. `four_required_truth_domains_activate_from_exact_user_scope`：one exact project/action/source-scoped User decision activates product/system/governance/operations and status becomes operational.
+5. `cold_validate_truth_status_and_recover_agree_after_activation`：three later independent processes agree on project ID, active source identities, operational stage, ledger head and zero fabricated session facts.
+
+### ST-1022 · Real immutable evidence, resources and closed lifecycle
+
+1. `git_commit_anchor_and_command_evidence_are_verified_from_project`：delivery anchor resolves to a real project commit and execution command evidence stores successful command, exit code, counts and verifier metadata.
+2. `runtime_readback_and_resource_probe_are_real_typed_evidence`：runtime readback is fresh and target-bound; file/port resource probe evidence is created and verified rather than represented by free-form strings.
+3. `exclusive_resource_claim_and_release_round_trip`：registered exclusive resource can be claimed only by the authorized work, survives cold status, and is released without an active lease after closure.
+4. `independent_quality_and_gate_reference_exact_delivery_commit`：quality actor and mandatory gate use typed evidence and the exact delivered Git commit, with pass/fail/skip/unknown counts visible in readback.
+5. `installed_cli_completes_and_cold_recovers_closed_work`：create/authorize/start/deliver/quality/gate/accept/close completes exclusively through new installed CLI processes; cold recovery reports closed and no next action.
+
+### ST-1023 · Adopted project and custom truth registry boundaries
+
+1. `adopt_existing_git_project_with_custom_registry`：an existing repository with user files adopts VoyageSkill using an explicit non-default registry and project ID.
+2. `adoption_preserves_preexisting_user_files_byte_for_byte`：init, review, decision and activation do not overwrite or normalize pre-existing tracked files.
+3. `custom_truth_paths_activate_and_validate_without_defaults`：four user-selected truth paths become the active registry sources, and default generated truth paths are not silently substituted.
+4. `adopted_project_cold_recovery_uses_persisted_identity_and_registry`：unrelated-process recovery discovers the persisted project ID and custom registry without conversation or source-checkout context.
+
+### ST-1024 · Rejection boundaries and zero partial writes
+
+1. `bootstrap_rejects_work_authorization_without_ledger_mutation`：before operational activation, work authorization is rejected and ledger head/file digest does not change.
+2. `wrong_user_decision_scope_rejects_activation_atomically`：wrong project, action or source scope fails with deterministic exit 2 and leaves registry plus ledger unchanged.
+3. `nonexistent_or_mismatched_commit_anchor_rejects_delivery_atomically`：unknown commit and evidence bound to another anchor are rejected without advancing work or ledger head.
+4. `executor_self_review_rejects_quality_atomically`：the delivery actor cannot issue final quality or mandatory gate verdict; neither event nor partial state is written.
+5. `exclusive_resource_conflict_rejects_second_claim_atomically`：a second work cannot claim the same exclusive conflict key while leased; the first lease and all unrelated state remain unchanged.
+
+### DEV-0012 执行顺序
+
+1. 添加 external-only wheel runner、Git fixture and all 19 tests，运行并记录预期失败。
+2. 先收敛 ST-1021 bootstrap/activation/session discovery，保持每个命令为独立进程。
+3. 再收敛 ST-1022 real commit/evidence/resource/lifecycle，并逐项运行安装后 focused tests。
+4. 收敛 ST-1023 custom-registry adoption 与 no-overwrite，随后验证 ST-1024 的每个失败前后摘要。
+5. 更新 active operations/CLI reference only where runtime behavior requires it；完整回归后创建不可变实现提交，精确复验、追加 CLOSE、推送并读回远端。
+
+---
+
+## 2026-08-19 · DEV-0012 · RW-102 · UPDATE
+
+- Status: in-progress; complete external-journey red baseline captured
+- Baseline: `07dafa3b09c02380311b400a23e7050e3412b795`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 19 installed-process tests and the external-only Git/wheel/venv harness were added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0012 START and corrected test-helper naming collision; the initial `unittest.TestCase.run` override was rejected as a harness error and is not counted as product red
+- Acceptance gates: failures must map to persisted recovery identity or structured quality readback rather than source imports, fixture shortcuts, invalid evidence, or test infrastructure
+- Actual result: expected FAIL; 19 tests ran with 16 passes, 0 assertion failures, and 3 errors
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_external_journeys -v`
+- Readback: both fresh and adopted cold recovery omit persisted `project_id` and custom `truth_registry`; full state records the quality transition but exposes no stable structured `work.quality` readback; all other bootstrap, activation, typed evidence, resource, lifecycle, adoption, self-review, decision-scope, bad-anchor, conflict, and zero-partial-write checks pass from the installed console
+- Remaining issues: add distribution-neutral persisted identity to recovery and converge independent-quality state readback without changing event/schema/kernel contracts; then rerun ST-1021/ST-1023 and ST-1022 respectively
+- Next safe action: implement only recovery project identity and registry path, run the two recovery failures plus all ST-1021/ST-1023 tests, then add structured quality readback and rerun ST-1022/ST-1024
+
+---
+
+## 2026-08-19 · DEV-0012 · RW-102 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `07dafa3b09c02380311b400a23e7050e3412b795`
+- Anchor: pending
+- Supersedes: none
+- Scope: installed-process fresh/adopted journeys are complete; truth and recovery now identify the persisted project/registry/head, and full derived work state retains the independent-quality result separately from the effective gate readback
+- Non-goals: unchanged; no new event, schema, graph type, persistent state, extension, dependency, publication action, or trust-boundary claim was introduced
+- Risk: standard; new fields are read-only projections of manifest and ledger data, while every negative journey compares ledger/control bytes before and after rejection
+- Dependencies: complete 16-pass/3-error red baseline; ST-1021 through ST-1024 focused rerun 19/19; active system and operations readback contracts converged
+- Acceptance gates: complete 370-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, external wheel process boundary, source-tree cleanliness, planning append-only history, and diff hygiene
+- Actual result: PASS before commit; focused 19/19 and full 370/370 passed with 0 failures, 0 errors, and 0 skips
+- Tests: two journeys use a locally built wheel installed with `--no-index --no-deps`; every Voyage command runs as a separate sanitized subprocess from a new unrelated cwd; no journey test imports the product core or reuses the dogfood ledger
+- Readback: fresh and adopted projects retain exact IDs and registry paths across cold processes; real full Git commits, command outputs, runtime reads, and resource probes verify as typed evidence; executor self-review, wrong User scope, invalid commit, bootstrap authorization, and conflicting lease each return exit 2 without advancing the ledger
+- Remaining issues: create the immutable implementation commit, rebuild/install its exact wheel, rerun all 19 focused and 370 full tests plus common gates, then append CLOSE; historical upgrade and interrupted-state matrices remain RW-103
+- Next safe action: run all non-test acceptance gates, commit RW-102, verify the exact commit through the installed wheel and full suite, then append CLOSE
+
+---
+
+## 2026-08-19 · DEV-0012 · RW-102 · CLOSE
+
+- Status: complete
+- Baseline: `07dafa3b09c02380311b400a23e7050e3412b795`
+- Anchor: `b794303b32b8be9643925548b75dd8d300bfb685`
+- Supersedes: none
+- Scope: delivered installed-process fresh and adopted project journeys, real Git/command/runtime/resource evidence, closed work recovery, exact persisted identity readback, structured independent-quality state, and atomic rejection coverage
+- Non-goals: unchanged; no publication, deployment, extension, new durable state, graph expansion, dependency, remote action, or trust-boundary expansion was introduced
+- Risk: standard; accepted only after rebuilding and installing the exact anchor wheel and rerunning every journey from disposable external Git projects
+- Dependencies: DEV-0012 START, complete 16-pass/3-error red baseline, implementation-complete UPDATE, and all exact-anchor gates satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 19 installed-process focused tests, complete 370-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, planning append-only history, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 19 RW-102 tests and all 370 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional acceptance gate passed
+- Tests: fresh and custom-registry adoption each ran through an offline-installed wheel with sanitized environment, no source cwd/PYTHONPATH, independent processes and persisted-only handoff; five negative boundaries returned deterministic rejection with byte-identical ledger/control inputs
+- Readback: fresh/adopted recover reports exact project ID, project-relative registry and replayed head; delivery/quality/gate share one real full Git commit evidence ID; released resources have no active lease; closed work reports next action `none`; source tree contains no journey artifact or environment
+- Remaining issues: RW-103 must now bind supported historical fixture versions and exercise interruption, damaged-tail/evidence, expired lease, unsupported lock and initialization-marker recovery without silently rewriting any project state
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-102 anchor, then start RW-103 with its complete test matrix before creating historical fixtures or upgrade behavior
+
+---
+
+## 2026-08-19 · DEV-0013 · RW-103 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `7fcb641b058ca71b8dae20761efcd6fe6cb54a95`
+- Anchor: pending
+- Supersedes: none
+- Scope: bind supported historical project layouts to human-auditable fixture manifests and digests; prove installed-reader migration, cross-process recovery, interrupted initialization, expired lease, damaged evidence/ledger/control data, unsupported writer capability, and failure atomicity
+- Non-goals: no automatic upgrade of unknown formats, snapshot/database/index, Windows writer, destructive repair, historical truth auto-activation, evidence promotion, extension enablement, risk reduction, new graph type, or claim against a malicious same-account writer
+- Risk: standard; compatibility code that guesses or rewrites history could silently create authority, so every supported transformation must be decision-bound and every unsupported/damaged input must fail before mutation
+- Dependencies: RW-102 installed-process and persisted-identity contract at the remote baseline above
+- Acceptance gates: all tests below are added before fixture/product implementation; each supported fixture has fixed provenance and SHA-256 coverage; every failure compares ledger/control/tree digests; final focused suite, full repository regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, clean source tree, and diff hygiene pass
+- Actual result: pending
+- Tests: 19 methods defined below; not run yet
+- Readback: existing unit tests cover individual legacy/init/damaged-input/platform cases, but the release branch has no immutable historical fixture catalog, installed-reader compatibility suite, aggregate mutation proof, or active compatibility policy
+- Remaining issues: all ST-1031 through ST-1034 work remains
+- Next safe action: add all 19 tests against intentionally absent fixtures/policy, capture the red baseline, then implement ST-1031 only
+
+### ST-1031 · Historical fixture catalog and supported reader boundary
+
+1. `fixture_catalog_is_versioned_and_lists_exact_supported_contracts`：catalog names fixture format, source Voyage version, expected project stage, migration mode, and every included file.
+2. `fixture_catalog_sha256_matches_every_historical_byte`：all listed files exist, have full SHA-256, no unlisted authoritative file exists, and catalog ordering is canonical.
+3. `installed_reader_validates_and_recovers_supported_legacy_fixture`：installed CLI reads the v0.1 legacy fixture as `legacy-bootstrap` without rewriting it or inventing activation evidence.
+4. `legacy_fixture_migration_requires_exact_user_decision_and_appends_only`：missing/wrong decision fails atomically; exact `truth.migrate` User scope appends confirmation and preserves all original ledger bytes as a prefix.
+5. `installed_reader_accepts_explicit_current_fixture_without_migration`：current explicit fixture validates/recoveries operational and rejects legacy migration without mutation.
+
+### ST-1032 · Unknown versions, interruption and cross-session recovery
+
+1. `future_manifest_schema_fails_closed_without_mutation`：unknown manifest schema returns structured invalid status and cannot recover or authorize work.
+2. `future_event_or_evidence_version_fails_closed_without_promotion`：unknown event/evidence version is never replayed, verified, activated, or rewritten.
+3. `started_init_marker_resumes_idempotently_with_one_initial_event`：started-phase marker plus matching arguments completes once; repeated completion cannot duplicate initialization.
+4. `mismatched_init_resume_arguments_leave_partial_tree_unchanged`：marker project/registry mismatch returns exit 2 and leaves every byte unchanged.
+5. `separate_processes_recover_identical_head_stage_and_next_actions`：three sanitized installed processes produce the same durable identity/head/stage/actions apart from explicit validation time.
+
+### ST-1033 · Damaged state, expired resources and atomic failure
+
+1. `truncated_ledger_tail_is_deterministic_json_error_without_traceback`：partial final line yields deterministic CLI error, no Python traceback, and no ledger repair/write.
+2. `hash_valid_but_invalid_event_payload_fails_without_state_mutation`：rehashed unsupported payload still fails schema/replay and is not normalized.
+3. `tampered_or_missing_consumed_evidence_blocks_recovery_without_mutation`：content-address mismatch and missing document each block cold recovery while preserving all bytes.
+4. `expired_stateful_lease_is_unknown_with_minimum_recovery_scope`：expired lease is reported unknown/recovery-required only for its resource/lease and does not auto-release.
+5. `unsupported_lock_backend_blocks_write_before_ledger_mutation`：writer capability unavailable returns the documented next action while read-only validation remains possible and ledger head is unchanged.
+
+### ST-1034 · Compatibility policy, aggregate mutation proof and operations
+
+1. `compatibility_policy_names_supported_migrate_and_reject_classes`：active system truth distinguishes read-compatible, User-migratable, damaged, and unknown-future inputs without claiming auto-repair.
+2. `runbook_documents_fixture_readback_migration_and_no_rewrite_rules`：operations truth provides exact validate/recover/decision/migrate order and stop conditions.
+3. `aggregate_negative_matrix_leaves_authoritative_tree_byte_identical`：all negative fixtures compare a complete tree snapshot before/after commands, not only ledger head.
+4. `historical_fixtures_are_test_only_not_truth_or_distribution_payload`：fixture paths are absent from truth registry and wheel, and source archive identifies them only as test material.
+
+### DEV-0013 执行顺序
+
+1. 添加 fixture catalog/reader/interruption/damage/atomicity 19 项测试，运行并记录预期失败。
+2. 创建最小 hand-auditable legacy/current fixture 与 canonical digest catalog，先通过 ST-1031。
+3. 收敛 unknown-version/init-resume/cross-process 行为并通过 ST-1032，不增加隐式迁移。
+4. 收敛 ST-1033 损坏、过期租约和 lock capability 的确定性读回；每项比较完整树摘要。
+5. 更新 active system/operations compatibility policy 并通过 ST-1034；完整回归后创建不可变实现提交，精确复验、追加 CLOSE、推送并读回远端。
+
+---
+
+## 2026-08-19 · DEV-0013 · RW-103 · UPDATE
+
+- Status: in-progress; complete compatibility red baseline captured
+- Baseline: `33e3432f3de60a9498681fbf9f4bf4bd3f1da520`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 19 historical-reader, interruption, damage, lease, lock, atomicity, policy, and distribution-boundary tests were added before fixture or product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0013 START; test harness successfully built/installed the current wheel and isolated all generated work outside the repository
+- Acceptance gates: failures must map to absent fixture/catalog/test-material metadata or active compatibility policy; existing safety behavior should remain green
+- Actual result: expected FAIL; 19 methods ran with 5 passes, 2 assertion failures, and 14 errors including three aggregate negative subtests
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_upgrade_recovery -v`
+- Readback: init marker resume/mismatch, tampered-or-missing consumed evidence, expired stateful lease scoping, and unsupported lock write refusal already pass; errors are missing `tests/fixtures/history` catalog/projects; assertions expose missing system/runbook compatibility markers and source `test_material` metadata
+- Remaining issues: create and independently inspect the minimal legacy/explicit fixtures, bind every byte in canonical catalog order, then run ST-1031 before changing documentation or source archive metadata
+- Next safe action: generate candidate fixtures outside the source tree, review their exact files/events, add them and their computed catalog through an explicit patch, then run only the five ST-1031 tests
+
+---
+
+## 2026-08-19 · DEV-0013 · RW-103 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `33e3432f3de60a9498681fbf9f4bf4bd3f1da520`
+- Anchor: pending
+- Supersedes: none
+- Scope: canonical legacy/explicit v0.1 fixture catalog, installed-reader migration/readback, unknown/damaged fail-closed matrices, interruption and cross-process recovery, evidence/lease/lock failure atomicity, source test-material metadata, and active compatibility operations are implemented
+- Non-goals: unchanged; no automatic unknown upgrade, repair, snapshot, Windows writer, truth activation, evidence promotion, extension enablement, risk relaxation, persistent runtime type, or publication action was added
+- Risk: standard; every historical byte is SHA-256 bound, migration still requires an exact User decision, and all negative commands prove complete authoritative-tree non-mutation
+- Dependencies: complete 5-pass/2-failure/14-error red baseline, corrected legacy activation expectation and full-chain fault injection, ST-1031 through ST-1034 focused rerun 19/19
+- Acceptance gates: complete 389-test-or-later regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, fixture catalog readback, installed wheel historical reader, source/wheel content boundary, clean source tree, planning append-only history, and diff hygiene
+- Actual result: PASS before commit for focused scope; 19/19 passed with 0 failures, 0 errors, and 0 skips
+- Tests: supported legacy remains legacy-bootstrap with four explicitly unverified active sources until exact User migration; current explicit reads operational; future/damaged/tampered/truncated/mismatched/unsupported cases stop without changing authoritative bytes
+- Readback: catalog contains two sorted entries and 12 SHA-256-bound files each; source archive labels `tests/fixtures/history/` as test material while wheel excludes it; three independent recover processes agree on identity, stage, head and next actions
+- Remaining issues: run the full repository and common gates, create the immutable implementation commit, rebuild/install that exact commit and rerun all 19/389-or-later tests before CLOSE; local release evidence remains RW-201
+- Next safe action: run full regression and common gates, commit RW-103, verify the exact anchor through rebuilt artifacts and fixture digests, then append CLOSE
+
+---
+
+## 2026-08-19 · DEV-0013 · RW-103 · CLOSE
+
+- Status: complete
+- Baseline: `33e3432f3de60a9498681fbf9f4bf4bd3f1da520`
+- Anchor: `8d770fa3382d6129e685b4c9d21ed14dc8ecd34a`
+- Supersedes: none
+- Scope: delivered byte-bound v0.1 legacy/explicit fixtures, installed-reader compatibility and migration proof, unknown/damaged fail-closed behavior, init/cross-session recovery, expired lease/evidence/lock atomicity, and active compatibility operations
+- Non-goals: unchanged; no automatic upgrade or repair, snapshot/database, Windows writer, inferred authority, runtime graph expansion, trust-boundary expansion, or external publication was introduced
+- Risk: standard; accepted only after exact-anchor artifact installation, complete fixture digest verification, and negative full-tree mutation checks
+- Dependencies: DEV-0013 START, complete 5-pass/2-failure/14-error red baseline, corrected legacy/no-invention assertion and full-chain fault injection, implementation-complete UPDATE, and all exact-anchor gates satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 19 focused tests, complete 389-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, fixture catalog readback, artifact content boundary, planning append-only history, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 19 RW-103 tests and all 389 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional gate passed
+- Tests: legacy migration preserves the pre-migration ledger as a byte prefix and requires exact User scope; explicit fixture remains operational without migration; future schema/evidence, damaged payload/tail, consumed evidence loss, init mismatch and unsupported writer all fail without authoritative-tree mutation
+- Readback: two catalog entries each bind 12 sorted files; legacy recovery reports four unverified active sources rather than inventing activation evidence; three cold sessions agree on identity/stage/head/actions; source manifest labels fixtures test-only and wheel excludes them
+- Remaining issues: RW-201 must generate and independently verify a local, content-addressed release evidence manifest that binds the exact commit, rebuilt artifacts, interpreter, complete test totals, Skill/dogfood results and both external journey suites while stopping before publication
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-103 anchor, then start RW-201 with its complete test matrix before adding release evidence code
+
+---
+
+## 2026-08-19 · DEV-0014 · RW-201 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `681122bc145c3f1ea86c0f696f625b249495ceab`
+- Anchor: pending
+- Supersedes: none
+- Scope: create and independently verify a deterministic, content-addressed local release evidence manifest that binds an exact source commit, wheel/source bytes, package version, interpreter/platform, complete test totals, Skill validation, dogfood validation, external journeys, and upgrade recovery
+- Non-goals: no package upload, remote tag/release, signature, notarization, changelog, publication credential, remote API, generated report as truth, new runtime state/event/graph type, or relaxation of User publication authority
+- Risk: standard; a plausible but incomplete report could falsely imply release readiness, so every mandatory result must retain raw output digests and fail closed on failed/skipped/unknown/missing data
+- Dependencies: RW-101 reproducible artifacts, RW-102 external journeys, RW-103 compatibility/atomicity, and clean remote baseline above
+- Acceptance gates: all tests below are added before release module/script implementation; each negative case mutates one immutable input or required result; final focused suite, full repository regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, exact-anchor artifact/readback, clean source tree, and diff hygiene pass
+- Actual result: pending
+- Tests: 18 methods defined below; not run yet
+- Readback: artifact builder and all acceptance suites exist, but there is no canonical release evidence schema, generator, verifier, content-addressed report, or local candidate command that binds their results together
+- Remaining issues: all ST-2011 through ST-2014 work remains
+- Next safe action: add all 18 tests and disposable check-bundle fixtures without product changes, capture the red baseline, then implement ST-2011 only
+
+### ST-2011 · Canonical content-addressed release evidence
+
+1. `generator_emits_canonical_manifest_outside_source_tree`：exact commit and external artifact/check inputs produce one canonical JSON report outside the repository.
+2. `manifest_binds_revision_version_wheel_and_source_bytes`：report records full commit, package version, normalized artifact names, byte counts and SHA-256 matching live files.
+3. `manifest_binds_interpreter_platform_and_five_complete_checks`：interpreter implementation/version/platform and repository/Skill/dogfood/external/upgrade result counts plus raw output descriptors are complete.
+4. `identical_inputs_rebuild_byte_identical_manifest_and_id`：same commit/artifacts/check bytes yield identical report bytes and `sha256:` ID independent of output directory.
+5. `generation_leaves_source_tree_unchanged`：builder, check ingestion and report creation create no source-tree artifact, cache, ledger event or truth entry.
+
+### ST-2012 · Independent verification and tamper rejection
+
+1. `verifier_recomputes_manifest_id_artifact_and_raw_output_digests`：independent readback recomputes every digest/byte count and returns exact revision/version/check summary.
+2. `verifier_rejects_missing_or_changed_artifact`：missing wheel/source, appended bytes or renamed artifact each fail deterministically.
+3. `verifier_rejects_wrong_revision_or_package_version`：manifest/source commit mismatch and wheel metadata/version mismatch cannot verify.
+4. `generator_rejects_missing_failed_skipped_unknown_or_inconsistent_check`：all five IDs required; exit nonzero, failed/skip/unknown, bad total or raw output mismatch fail before report creation.
+5. `verifier_rejects_manifest_field_or_content_address_tamper`：editing command/count/platform/digest/ID or filename fails without repairing the report.
+
+### ST-2013 · Local commands, reproducibility and publication authority
+
+1. `release_script_create_and_verify_round_trip_from_unrelated_cwd`：checkout script creates/verifies JSON from sanitized unrelated cwd without repository-local import setup.
+2. `deleting_report_and_rebuilding_from_immutable_inputs_restores_same_id`：report is disposable and reproducible; deletion loses no authority or project state.
+3. `runbook_documents_candidate_build_checks_verify_and_user_stop`：active operations truth gives exact local flow, mandatory result policy and User-controlled external publication stop.
+4. `skill_remains_stable_entry_and_does_not_embed_release_procedure`：Skill points release tasks to active operations truth and keeps high-risk stop, without copying detailed commands or dynamic candidate state.
+
+### ST-2014 · Integrated candidate evidence boundary
+
+1. `real_built_artifacts_install_and_verify_under_release_manifest`：manifest-bound wheel installs offline and installed version matches report/package/source.
+2. `source_archive_commit_manifest_matches_release_revision`：`VOYAGE-SOURCE.json` revision/version and test-material classification match release evidence.
+3. `generated_release_report_is_not_truth_or_distribution_payload`：report path is absent from truth registry, wheel and source archive; only generator/verifier code ships.
+4. `release_tool_has_no_publish_tag_sign_or_remote_mutation_surface`：parser/help/runtime contain no upload, publish, tag, sign, notarize or remote release action.
+
+### DEV-0014 执行顺序
+
+1. 添加 18 项 release evidence tests 和真实临时 artifact/check bundle，运行并记录预期失败。
+2. 实现 ST-2011 canonical generator 与固定五项 check contract，逐项测试。
+3. 实现 ST-2012 independent verifier 与所有单点 tamper cases，不自动修复输入。
+4. 添加 checkout-only local release script，收敛 ST-2013 operations/Skill；再用真实 wheel/source/install 通过 ST-2014。
+5. 完整回归后创建不可变实现提交，生成该精确 commit 的本地 release evidence、独立复验、追加 CLOSE 和 PLAN-0002 CLOSE、推送并读回远端；停在 User-controlled publication boundary。
+
+---
+
+## 2026-08-19 · DEV-0014 · RW-201 · UPDATE
+
+- Status: in-progress; complete release-evidence red baseline captured
+- Baseline: `55b92fa7f6abab0cbecdf5ae20b93c8feba0ee01`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 18 canonical manifest, independent verification, tamper, script, documentation, artifact installation, distribution isolation, and publication-surface tests were added before release implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0014 START; real exact-commit artifacts and five raw-output check descriptors were built outside the repository before assertions
+- Acceptance gates: failures must map to absent release module/script or missing active routing/operations contract; the one vacuous negative pass caused by module import failure is not evidence of implemented rejection
+- Actual result: expected FAIL; 18 methods ran with 4 assertion failures and 15 errors including artifact subtests; one negative aggregate method returned expected exception only because the module was absent
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_release_evidence -v`
+- Readback: `voyage_skill.release` and `scripts/voyage-release.py` are absent; runbook lacks five-check candidate commands; Skill has no progressive release-task routing; all real wheel/source/check inputs were created successfully by prior contracts
+- Remaining issues: implement canonical generator and strict five-check ingestion first, rerun ST-2011 and the negative aggregate to replace vacuous import errors with semantic failures, then add verifier and script
+- Next safe action: implement only `create_release_evidence` with exact commit/artifact/source-manifest/check validation and source-tree output guard, then run ST-2011 before verifier or documentation changes
+
+---
+
+## 2026-08-19 · DEV-0014 · RW-201 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `55b92fa7f6abab0cbecdf5ae20b93c8feba0ee01`
+- Anchor: pending
+- Supersedes: none
+- Scope: deterministic local release evidence generator/verifier, checkout script, exact five-check contract, artifact/source/interpreter binding, tamper rejection, active operations procedure, and stable Skill routing are implemented
+- Non-goals: unchanged; the tool has only create/verify, performs no upload/tag/sign/notarize/remote release, adds no project state or truth, and grants no publication authority
+- Risk: standard; generation validates every immutable input before creating the output directory, verification independently recomputes all bytes and fields, and the report remains disposable
+- Dependencies: complete red baseline, ST-2011 through ST-2014 focused rerun 18/18, real wheel offline installation and source contract readback satisfied
+- Acceptance gates: complete 407-test-or-later regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, exact-anchor artifact/check/report generation and independent verification, clean source tree, planning append-only history, and diff hygiene
+- Actual result: PASS before commit for focused scope; 18/18 passed with 0 failures, 0 errors, and 0 skips
+- Tests: all five check IDs require exit 0, positive total, passed equal total, zero failed/skipped/unknown, and live raw-output digest/size; artifact and manifest mutation cases fail deterministically without repair
+- Readback: identical inputs create byte-identical report/ID across output directories; report-bound wheel installs offline as version 0.1.0; source revision/version/test-material matches; report is absent from truth registry and both distribution payloads; Skill remains 118 lines
+- Remaining issues: run the full repository and common gates, create the immutable implementation commit, then generate a real local report for that exact commit using actual 407-or-later totals and raw outputs before RW-201/PLAN-0002 closure
+- Next safe action: run full regression and common gates, commit RW-201, rebuild exact-anchor artifacts, record actual acceptance outputs, create/verify the content-addressed report, then append both CLOSE records
+
+---
+
+## 2026-08-19 · DEV-0014 · RW-201 · CLOSE
+
+- Status: complete
+- Baseline: `55b92fa7f6abab0cbecdf5ae20b93c8feba0ee01`
+- Anchor: `be9c676bc1e30c18647a0c07fbfd8b209398ffae`
+- Supersedes: none
+- Scope: delivered deterministic content-addressed local release evidence generation and independent verification, strict five-check/raw-output binding, checkout script, artifact/install readback, operations procedure, and stable Skill routing
+- Non-goals: unchanged; no upload, tag, remote release, signature, notarization, credential use, generated truth, runtime state expansion, or publication authority was introduced
+- Risk: standard; accepted only after generating and independently verifying a real report for the exact immutable anchor and installing its bound wheel offline
+- Dependencies: DEV-0014 START, complete red baseline, implementation-complete UPDATE, RW-101 through RW-103 evidence, and all exact-anchor gates satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 18 focused tests, complete 407-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, real artifact build/install, five raw-output descriptors, independent report verification, planning append-only history, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 18 RW-201 tests and all 407 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional gate passed
+- Tests: real check bundle recorded repository 407/407, external journeys 19/19, upgrade recovery 19/19, Skill validation 1/1, and dogfood validation 3/3, each with zero failed, skipped, or unknown and a live raw-output SHA-256
+- Readback: wheel 57,730 bytes SHA-256 `77e42f3a8f81cf4e6d42e14b318543d171faff7fcf4204a4a6a9fc112dbf5fcf`; source 266,349 bytes SHA-256 `e7ce9ea74b38f876a8d52623c66b28181ad78a49ea26b93b252f8e33377592c6`; offline console/module both report `voyage 0.1.0`
+- Release evidence: local report `/tmp/voyage-rw201-anchor-be9c676.o2QdGg/release/voyage-release-35d0e5793ea777543ce0d6db51c0e50a085ed726ca87fca437452c12ca9dae23.json` independently verifies as `sha256:35d0e5793ea777543ce0d6db51c0e50a085ed726ca87fca437452c12ca9dae23`; it is disposable evidence and is not committed or registered as truth
+- Remaining issues: none inside RW-201; external publication and branch integration remain outside this evidence generator and require explicit User action/authorization
+- Next safe action: append PLAN-0002 CLOSE, commit and push both closure records, verify the remote branch head contains every immutable work anchor, then stop at the User-controlled review/integration/publication boundary
+
+---
+
+## 2026-08-19 · PLAN-0002 · CLOSE
+
+- Status: complete
+- Baseline: `1bba25b6a4b5b309c82ed1a0c59e6f996f0c9a92`
+- Delivery branch: `xp/plan-real-world-hardening`
+- Immutable work anchors: RW-000 `533cb7b1526b2868423bb1f58f0a6cb87773fa61`; RW-101 `9e147a08d4d4b0c20ac14595ee61867da1122a7e`; RW-102 `b794303b32b8be9643925548b75dd8d300bfb685`; RW-103 `8d770fa3382d6129e685b4c9d21ed14dc8ecd34a`; RW-201 `be9c676bc1e30c18647a0c07fbfd8b209398ffae`
+- Objective result: PASS; VoyageSkill is buildable, reproducibly packaged, offline installable, externally invocable, adoptable, explicitly migratable, cold-recoverable, failure-atomic, and locally release-evidence-verifiable without conversation memory, repository-local imports, fabricated evidence, or permanent-kernel expansion
+- Delivered surfaces: source-checkout Skill/scripts and zero-third-party-runtime-dependency Python wheel; both retain version 0.1.0 and the same installed CLI contract
+- Real-world journeys: fresh bootstrap through activation and closed work, custom-registry adoption without overwrite, real typed Git/command/runtime/resource evidence, self-review/decision/anchor/conflict rejection, and persisted identity across unrelated processes
+- Compatibility and recovery: two per-byte historical fixtures, explicit User migration, unknown/damaged fail-closed behavior, init resumption, expired lease and evidence classification, unsupported writer refusal, and complete negative-tree non-mutation
+- Local release evidence: manifest `sha256:35d0e5793ea777543ce0d6db51c0e50a085ed726ca87fca437452c12ca9dae23` binds RW-201 commit, artifact bytes, interpreter/platform, 407 repository tests, 19 external journeys, 19 upgrade/recovery tests, Skill validation, and dogfood validation
+- Unified gate result: PASS; 407 passed, 0 failed, 0 errors, 0 skipped; compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, artifact reproducibility/content inspection, offline install/version readback, fixture SHA catalog, planning append-only history, source-tree cleanliness, and diff hygiene all passed
+- Kernel constraint: no new permanent graph node/edge, event type, mandatory gate, background service, provider, snapshot, database, extension enablement, Windows writer, or expanded trust boundary was added
+- Publication boundary: no package upload, remote tag/release, signature, notarization, branch deletion, or credentialed external mutation was performed; the local report does not authorize any of them
+- Remaining issues: none within PLAN-0002; merge/review and any external publication are separate User-controlled actions
+- Next safe action: commit and push this append-only closure, verify remote branch parity, then present the immutable anchors and local evidence ID for User review without performing publication or branch deletion

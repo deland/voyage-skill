@@ -136,8 +136,28 @@ idempotently and records exactly one `project.initialized` event. Different
 arguments fail without mutation. Successful initialization removes the marker;
 an adopted truth registry is validated but never rewritten or deleted.
 
+Cold truth and recovery views identify the project from the persisted manifest,
+including `project_id`, project-relative `truth_registry`, and the replayed
+`ledger_head`. Full derived work state retains a structured independent-quality
+result bound to its delivery anchor; a later gate readback does not erase that
+quality actor, evidence, count, or event provenance.
+
 Every edge names its endpoints, preconditions, creating permission, required
 evidence, invalidation conditions, and failure transition.
+
+## Historical compatibility boundary
+
+The test-only historical catalog defines exact `read-compatible` and
+`user-migratable` v0.1 inputs by source version and per-file SHA-256. A
+read-compatible explicit project is replayed as recorded. A user-migratable
+legacy project remains `legacy-bootstrap` until an exact User decision for
+`truth.migrate` authorizes an append-only migration; no truth activation,
+evidence promotion, extension enablement, or risk reduction is inferred.
+
+Structurally `damaged` data and any `unknown-future` schema or evidence version
+fail closed before authoritative mutation. Voyage performs no automatic repair
+or unknown-version conversion. Historical fixtures are test material, not
+project truth, snapshots, or templates for live state.
 
 ## Executable risk enforcement
 

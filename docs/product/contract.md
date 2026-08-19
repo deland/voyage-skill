@@ -57,3 +57,16 @@ Actor identity is a local caller assertion, not cryptographic authentication.
 The trusted boundary is the OS account and worktree permissions. Ledger hashes
 make later edits tamper-evident but not tamper-proof; protection against a
 hostile same-account writer is out of scope for v0.x.
+
+## Distribution boundary
+
+VoyageSkill supports a **source-checkout Skill bundle** and an **installable CLI artifact**.
+The Skill bundle is the stable agent entry plus its deterministic
+checkout runtime; the CLI artifact exposes the same `voyage` behavior without
+carrying project truth, dogfood state, tests, research input, or release
+reports. Build tooling is not a runtime dependency.
+
+Local construction and verification do not authorize publication. Uploading,
+tagging, signing, or creating a remote release requires separate scoped User authorization.
+A generated artifact or passing report is evidence only and
+cannot change project truth or the User authority boundary.

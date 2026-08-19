@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "v0.1-explicit",
+      "source_version": "0.1.0",
+      "project_stage": "operational",
+      "compatibility": "read-compatible",
+      "files": [
+        {"path": ".voyage/evidence/.gitkeep", "sha256": "acc4222e5e6eca693e09594db52a99756ab022926a22be5ef19f424a7b2d39eb"},
+        {"path": ".voyage/gates.json", "sha256": "48d86fcea15d9822810cea2c1db146ec1a2200c1318661cf08a9472279a9f0b6"},
+        {"path": ".voyage/graph.json", "sha256": "4ee21cd3d94f4bdd4f2c777696bd6fa1d20401aeacae0882da4938b27e04b9ea"},
+        {"path": ".voyage/ledger/events.jsonl", "sha256": "fb92cbacef1614f069d1dfc1c1a459f738b7186a6f16425322ea209b61320804"},
+        {"path": ".voyage/ledger/events.jsonl.lock", "sha256": "1f0a38ba98272216fdbc67e9a77f9995d08564d3307c6da4f544154b9cc5d4a9"},
+        {"path": ".voyage/manifest.json", "sha256": "a70e5021b71b3ded6114a3359edaa5d9be40fe0674700f62beca823fca8a829d"},
+        {"path": ".voyage/resources.json", "sha256": "83be9caaef06badf051f27e15f3427023f467a5ed0d65a00edd1c08e18db56f3"},
+        {"path": "docs/voyage/governance.md", "sha256": "2271b882724559e4748fde2ef2c67a5ad0e72f5d7547909d1448c38039d2cf0a"},
+        {"path": "docs/voyage/operations.md", "sha256": "4a4882752e6b823d3afb016b26f0d0a1b98806a1b643d43e42b46be17235a161"},
+        {"path": "docs/voyage/product.md", "sha256": "2ea6edd616ad50758725628d4e3dd1baa5f716eddfa9e422f582eb3bf3fdaf35"},
+        {"path": "docs/voyage/system.md", "sha256": "b66d249e84b43962e1236033d1891e2c400f923fb52560c5ded95b4a178e7646"},
+        {"path": "docs/voyage/truth-registry.json", "sha256": "8159459738bad463a15ffd45fd1f235bfde9d377ac534c5a59fb6b259afe1726"}
+      ]
+    },
+    {
+      "id": "v0.1-legacy",
+      "source_version": "0.1.0",
+      "project_stage": "legacy-bootstrap",
+      "compatibility": "user-migratable",
+      "files": [
+        {"path": ".voyage/evidence/.gitkeep", "sha256": "acc4222e5e6eca693e09594db52a99756ab022926a22be5ef19f424a7b2d39eb"},
+        {"path": ".voyage/gates.json", "sha256": "48d86fcea15d9822810cea2c1db146ec1a2200c1318661cf08a9472279a9f0b6"},
+        {"path": ".voyage/graph.json", "sha256": "4ee21cd3d94f4bdd4f2c777696bd6fa1d20401aeacae0882da4938b27e04b9ea"},
+        {"path": ".voyage/ledger/events.jsonl", "sha256": "1afb1e1133861f2358b433b8c2162389c34dc680a2b947988e6e3268a83c5751"},
+        {"path": ".voyage/ledger/events.jsonl.lock", "sha256": "1f0a38ba98272216fdbc67e9a77f9995d08564d3307c6da4f544154b9cc5d4a9"},
+        {"path": ".voyage/manifest.json", "sha256": "19d4821fe10c58689374f13de46c28ba7ea08e48de2414d47d7a1bc4b3fef441"},
+        {"path": ".voyage/resources.json", "sha256": "83be9caaef06badf051f27e15f3427023f467a5ed0d65a00edd1c08e18db56f3"},
+        {"path": "docs/voyage/governance.md", "sha256": "2271b882724559e4748fde2ef2c67a5ad0e72f5d7547909d1448c38039d2cf0a"},
+        {"path": "docs/voyage/operations.md", "sha256": "4a4882752e6b823d3afb016b26f0d0a1b98806a1b643d43e42b46be17235a161"},
+        {"path": "docs/voyage/product.md", "sha256": "2ea6edd616ad50758725628d4e3dd1baa5f716eddfa9e422f582eb3bf3fdaf35"},
+        {"path": "docs/voyage/system.md", "sha256": "b66d249e84b43962e1236033d1891e2c400f923fb52560c5ded95b4a178e7646"},
+        {"path": "docs/voyage/truth-registry.json", "sha256": "4395c0ce109021435c06597490a0b8f480d5e223dce6deaf5c2e66e226e34869"}
+      ]
+    }
+  ]
+}
