@@ -2258,3 +2258,41 @@ active → retired | superseded
 3. 使用真实 wheel、clean venv、无网络安装通过 ST-1012。
 4. 更新 active runbook 与生成的 CLI reference；保持 Skill 入口精简。
 5. 完整回归后创建不可变实现提交，复验、追加 CLOSE、推送并读回远端。
+
+---
+
+## 2026-08-19 · DEV-0011 · RW-101 · UPDATE
+
+- Status: in-progress; complete red baseline captured
+- Baseline: `82c259b11cb8bccdb2b284275662365c4d541962`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 14 artifact tests were added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0011 START
+- Acceptance gates: failures must map to missing builder, inspector, script, version exchange, installation behavior, and runbook detail rather than unrelated regressions
+- Actual result: expected FAIL; 14 tests ran with 0 passes, 5 assertion failures, and 9 errors
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_distribution_artifacts -v`
+- Readback: `voyage_skill.distribution` and `scripts/voyage-build.py` are absent; `--version` falls through to the required-command error; runbook has the authority boundary but not executable local build/install steps
+- Remaining issues: all ST-1011 through ST-1013 implementation remains
+- Next safe action: implement commit-bound deterministic wheel/source builders, strict wheel inspection, build script, CLI version, and negative output/revision guards before running installation tests
+
+---
+
+## 2026-08-19 · DEV-0011 · RW-101 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `82c259b11cb8bccdb2b284275662365c4d541962`
+- Anchor: pending
+- Supersedes: none
+- Scope: deterministic standard-library wheel/source builder and strict wheel inspector, executable checkout build script, common CLI `--version`, offline clean-venv install/readback, and active local candidate operations are implemented
+- Non-goals: unchanged; no external publication, remote tag/release, signature, full lifecycle journey, upgrade fixture, extension, runtime state change, or third-party runtime dependency
+- Risk: standard; builder reads only an exact Git commit, emits outside the source tree, verifies RECORD/entry point/digest, and cleans a failed new output directory
+- Dependencies: complete 0-pass red baseline, canonical-path test correction, ST-1011/ST-1013 9/9 except planned runbook gap, ST-1012 5/5 real install, and final runbook convergence satisfied
+- Acceptance gates: 14 focused tests, complete 351-test regression, compileall, dogfood validate, CLI reference, official Skill validation, source-tree cleanliness, and diff hygiene
+- Actual result: PASS before commit; focused 14/14 and full 351/351 passed with 0 failures, 0 errors, and 0 skips; all other gates passed
+- Tests: wheel installs with `--no-index --no-deps` in a new venv, installed console and module versions match, external bootstrap init/validate/recover succeeds, repeated artifacts are byte-identical, dirty worktree content is excluded, and negative revision/output/tamper cases fail without source mutation
+- Readback: wheel contains only runtime Python, license and dist-info metadata with no Requires-Dist; source archive carries a versioned commit manifest; build/install produces no repository artifact; the original clean-source pip failure remains correctly classified as missing build tooling rather than a runtime dependency
+- Remaining issues: create the immutable commit and use its exact SHA to run the builder from the checkout, compare two artifact builds, install one wheel, and rerun all gates before CLOSE
+- Next safe action: commit RW-101, build and install exact-anchor artifacts outside the source tree, rerun 14 focused and 351 full tests, then append CLOSE

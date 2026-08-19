@@ -106,6 +106,25 @@ source commit, artifact digest, interpreter, complete test totals, and raw
 command output. Never treat a wheel, archive, generated report, or successful
 test as project truth.
 
+Build one exact commit with a fixed non-negative timestamp into a new external
+directory, then install the reported wheel without an index or dependency
+resolution:
+
+```bash
+python3 scripts/voyage-build.py --source . --output <external-new-directory> --revision <full-commit> --source-date-epoch <epoch>
+python3 -m venv <external-venv>
+<external-venv>/bin/python -m pip install --no-index --no-deps <reported-wheel>
+<external-venv>/bin/voyage --version
+<external-venv>/bin/voyage --help
+```
+
+The builder reads package and source files from the commit, verifies wheel
+RECORD hashes and the console entry point, emits wheel/source SHA-256 values,
+and rejects an output directory inside the checkout before mutation. Rebuild
+with the same commit and epoch to compare byte-identical digests. Treat a
+missing Git commit, non-repository source, existing output directory, changed
+digest, missing RECORD, or wrong entry point as a failed candidate.
+
 Stop after local verification. Uploading, tagging, signing, or creating any
 remote release requires separate scoped User authorization; PLAN-0002 does not
 grant publication authority.
