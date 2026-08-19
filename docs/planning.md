@@ -2545,3 +2545,60 @@ active → retired | superseded
 - Readback: two catalog entries each bind 12 sorted files; legacy recovery reports four unverified active sources rather than inventing activation evidence; three cold sessions agree on identity/stage/head/actions; source manifest labels fixtures test-only and wheel excludes them
 - Remaining issues: RW-201 must generate and independently verify a local, content-addressed release evidence manifest that binds the exact commit, rebuilt artifacts, interpreter, complete test totals, Skill/dogfood results and both external journey suites while stopping before publication
 - Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-103 anchor, then start RW-201 with its complete test matrix before adding release evidence code
+
+---
+
+## 2026-08-19 · DEV-0014 · RW-201 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `681122bc145c3f1ea86c0f696f625b249495ceab`
+- Anchor: pending
+- Supersedes: none
+- Scope: create and independently verify a deterministic, content-addressed local release evidence manifest that binds an exact source commit, wheel/source bytes, package version, interpreter/platform, complete test totals, Skill validation, dogfood validation, external journeys, and upgrade recovery
+- Non-goals: no package upload, remote tag/release, signature, notarization, changelog, publication credential, remote API, generated report as truth, new runtime state/event/graph type, or relaxation of User publication authority
+- Risk: standard; a plausible but incomplete report could falsely imply release readiness, so every mandatory result must retain raw output digests and fail closed on failed/skipped/unknown/missing data
+- Dependencies: RW-101 reproducible artifacts, RW-102 external journeys, RW-103 compatibility/atomicity, and clean remote baseline above
+- Acceptance gates: all tests below are added before release module/script implementation; each negative case mutates one immutable input or required result; final focused suite, full repository regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, exact-anchor artifact/readback, clean source tree, and diff hygiene pass
+- Actual result: pending
+- Tests: 18 methods defined below; not run yet
+- Readback: artifact builder and all acceptance suites exist, but there is no canonical release evidence schema, generator, verifier, content-addressed report, or local candidate command that binds their results together
+- Remaining issues: all ST-2011 through ST-2014 work remains
+- Next safe action: add all 18 tests and disposable check-bundle fixtures without product changes, capture the red baseline, then implement ST-2011 only
+
+### ST-2011 · Canonical content-addressed release evidence
+
+1. `generator_emits_canonical_manifest_outside_source_tree`：exact commit and external artifact/check inputs produce one canonical JSON report outside the repository.
+2. `manifest_binds_revision_version_wheel_and_source_bytes`：report records full commit, package version, normalized artifact names, byte counts and SHA-256 matching live files.
+3. `manifest_binds_interpreter_platform_and_five_complete_checks`：interpreter implementation/version/platform and repository/Skill/dogfood/external/upgrade result counts plus raw output descriptors are complete.
+4. `identical_inputs_rebuild_byte_identical_manifest_and_id`：same commit/artifacts/check bytes yield identical report bytes and `sha256:` ID independent of output directory.
+5. `generation_leaves_source_tree_unchanged`：builder, check ingestion and report creation create no source-tree artifact, cache, ledger event or truth entry.
+
+### ST-2012 · Independent verification and tamper rejection
+
+1. `verifier_recomputes_manifest_id_artifact_and_raw_output_digests`：independent readback recomputes every digest/byte count and returns exact revision/version/check summary.
+2. `verifier_rejects_missing_or_changed_artifact`：missing wheel/source, appended bytes or renamed artifact each fail deterministically.
+3. `verifier_rejects_wrong_revision_or_package_version`：manifest/source commit mismatch and wheel metadata/version mismatch cannot verify.
+4. `generator_rejects_missing_failed_skipped_unknown_or_inconsistent_check`：all five IDs required; exit nonzero, failed/skip/unknown, bad total or raw output mismatch fail before report creation.
+5. `verifier_rejects_manifest_field_or_content_address_tamper`：editing command/count/platform/digest/ID or filename fails without repairing the report.
+
+### ST-2013 · Local commands, reproducibility and publication authority
+
+1. `release_script_create_and_verify_round_trip_from_unrelated_cwd`：checkout script creates/verifies JSON from sanitized unrelated cwd without repository-local import setup.
+2. `deleting_report_and_rebuilding_from_immutable_inputs_restores_same_id`：report is disposable and reproducible; deletion loses no authority or project state.
+3. `runbook_documents_candidate_build_checks_verify_and_user_stop`：active operations truth gives exact local flow, mandatory result policy and User-controlled external publication stop.
+4. `skill_remains_stable_entry_and_does_not_embed_release_procedure`：Skill points release tasks to active operations truth and keeps high-risk stop, without copying detailed commands or dynamic candidate state.
+
+### ST-2014 · Integrated candidate evidence boundary
+
+1. `real_built_artifacts_install_and_verify_under_release_manifest`：manifest-bound wheel installs offline and installed version matches report/package/source.
+2. `source_archive_commit_manifest_matches_release_revision`：`VOYAGE-SOURCE.json` revision/version and test-material classification match release evidence.
+3. `generated_release_report_is_not_truth_or_distribution_payload`：report path is absent from truth registry, wheel and source archive; only generator/verifier code ships.
+4. `release_tool_has_no_publish_tag_sign_or_remote_mutation_surface`：parser/help/runtime contain no upload, publish, tag, sign, notarize or remote release action.
+
+### DEV-0014 执行顺序
+
+1. 添加 18 项 release evidence tests 和真实临时 artifact/check bundle，运行并记录预期失败。
+2. 实现 ST-2011 canonical generator 与固定五项 check contract，逐项测试。
+3. 实现 ST-2012 independent verifier 与所有单点 tamper cases，不自动修复输入。
+4. 添加 checkout-only local release script，收敛 ST-2013 operations/Skill；再用真实 wheel/source/install 通过 ST-2014。
+5. 完整回归后创建不可变实现提交，生成该精确 commit 的本地 release evidence、独立复验、追加 CLOSE 和 PLAN-0002 CLOSE、推送并读回远端；停在 User-controlled publication boundary。
