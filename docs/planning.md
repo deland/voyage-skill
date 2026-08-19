@@ -2315,3 +2315,61 @@ active → retired | superseded
 - Readback: builds in `/tmp/voyage-rw101-anchor-a-9e147a0` and `/tmp/voyage-rw101-anchor-b-9e147a0` were byte-identical; wheel size 54,099 bytes and SHA-256 `90477c11ec2c35882cffc416d1eef982b717c7a21b39ed85a49fbd0a0b8b81fd`; source archive size 235,566 bytes and SHA-256 `8a01801ab356194032e043f61e92f552662c158294477c826c3f36e16bc98542`; no artifact or environment was created in the source tree
 - Remaining issues: artifact construction and installation are proven, but RW-102 must prove the installed product through complete fresh-project and adopted-project black-box journeys using real immutable evidence and failure boundaries
 - Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-101 anchor, then start RW-102 with its complete test matrix before changing journey behavior
+
+---
+
+## 2026-08-19 · DEV-0012 · RW-102 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `271289b7714d3c21e84b0fd50576ed54e454fdad`
+- Anchor: pending
+- Supersedes: none
+- Scope: prove fresh-project and adopted-project journeys using only an installed RW-101 wheel, independent CLI processes, unrelated working directories, persisted project files, real Git commits, typed evidence, resource controls, and cold command readback
+- Non-goals: no Python core calls from journey tests, production deployment, optional extension enablement, dogfood-ledger fixture reuse, package publication, remote release/tag/signature, new permanent graph type, or unrelated README expansion
+- Risk: standard; the work exercises the complete authority and evidence path from an external process boundary, and any partial write or source-tree dependency would invalidate the distribution claim
+- Dependencies: RW-101 immutable artifact/install contract and remote CLOSE at the baseline above
+- Acceptance gates: all tests below are added before product implementation and expose only external-journey contract gaps; every subtask passes before the next; final focused suite, full repository regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, clean source tree, and diff hygiene pass
+- Actual result: pending
+- Tests: 19 methods defined below; not run yet
+- Readback: installed CLI currently proves only init/validate/recover of an unreviewed bootstrap; no installed-process test completes truth activation, real delivery evidence, resource ownership, adoption, negative authority cases, or cold closed-work recovery
+- Remaining issues: all ST-1021 through ST-1024 work remains
+- Next safe action: add all 19 tests and their external-only harness without product changes, capture the red baseline, then implement ST-1021 only
+
+### ST-1021 · Installed-process fresh bootstrap and session independence
+
+1. `installed_runner_has_no_source_path_or_pythonpath`：wheel-installed console runs from unrelated cwd with a sanitized environment whose argv, PATH, cwd and module locations do not reference the source checkout.
+2. `fresh_init_creates_drafts_and_bootstrap_readback`：new Git project init creates only bootstrap truth drafts and reports bootstrap through a new process.
+3. `reviewed_drafts_require_user_decision_before_activation`：edited/reviewed drafts remain inactive until a persisted User decision exists; governance cannot substitute its own decision.
+4. `four_required_truth_domains_activate_from_exact_user_scope`：one exact project/action/source-scoped User decision activates product/system/governance/operations and status becomes operational.
+5. `cold_validate_truth_status_and_recover_agree_after_activation`：three later independent processes agree on project ID, active source identities, operational stage, ledger head and zero fabricated session facts.
+
+### ST-1022 · Real immutable evidence, resources and closed lifecycle
+
+1. `git_commit_anchor_and_command_evidence_are_verified_from_project`：delivery anchor resolves to a real project commit and execution command evidence stores successful command, exit code, counts and verifier metadata.
+2. `runtime_readback_and_resource_probe_are_real_typed_evidence`：runtime readback is fresh and target-bound; file/port resource probe evidence is created and verified rather than represented by free-form strings.
+3. `exclusive_resource_claim_and_release_round_trip`：registered exclusive resource can be claimed only by the authorized work, survives cold status, and is released without an active lease after closure.
+4. `independent_quality_and_gate_reference_exact_delivery_commit`：quality actor and mandatory gate use typed evidence and the exact delivered Git commit, with pass/fail/skip/unknown counts visible in readback.
+5. `installed_cli_completes_and_cold_recovers_closed_work`：create/authorize/start/deliver/quality/gate/accept/close completes exclusively through new installed CLI processes; cold recovery reports closed and no next action.
+
+### ST-1023 · Adopted project and custom truth registry boundaries
+
+1. `adopt_existing_git_project_with_custom_registry`：an existing repository with user files adopts VoyageSkill using an explicit non-default registry and project ID.
+2. `adoption_preserves_preexisting_user_files_byte_for_byte`：init, review, decision and activation do not overwrite or normalize pre-existing tracked files.
+3. `custom_truth_paths_activate_and_validate_without_defaults`：four user-selected truth paths become the active registry sources, and default generated truth paths are not silently substituted.
+4. `adopted_project_cold_recovery_uses_persisted_identity_and_registry`：unrelated-process recovery discovers the persisted project ID and custom registry without conversation or source-checkout context.
+
+### ST-1024 · Rejection boundaries and zero partial writes
+
+1. `bootstrap_rejects_work_authorization_without_ledger_mutation`：before operational activation, work authorization is rejected and ledger head/file digest does not change.
+2. `wrong_user_decision_scope_rejects_activation_atomically`：wrong project, action or source scope fails with deterministic exit 2 and leaves registry plus ledger unchanged.
+3. `nonexistent_or_mismatched_commit_anchor_rejects_delivery_atomically`：unknown commit and evidence bound to another anchor are rejected without advancing work or ledger head.
+4. `executor_self_review_rejects_quality_atomically`：the delivery actor cannot issue final quality or mandatory gate verdict; neither event nor partial state is written.
+5. `exclusive_resource_conflict_rejects_second_claim_atomically`：a second work cannot claim the same exclusive conflict key while leased; the first lease and all unrelated state remain unchanged.
+
+### DEV-0012 执行顺序
+
+1. 添加 external-only wheel runner、Git fixture and all 19 tests，运行并记录预期失败。
+2. 先收敛 ST-1021 bootstrap/activation/session discovery，保持每个命令为独立进程。
+3. 再收敛 ST-1022 real commit/evidence/resource/lifecycle，并逐项运行安装后 focused tests。
+4. 收敛 ST-1023 custom-registry adoption 与 no-overwrite，随后验证 ST-1024 的每个失败前后摘要。
+5. 更新 active operations/CLI reference only where runtime behavior requires it；完整回归后创建不可变实现提交，精确复验、追加 CLOSE、推送并读回远端。
