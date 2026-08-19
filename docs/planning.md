@@ -2640,3 +2640,42 @@ active → retired | superseded
 - Readback: identical inputs create byte-identical report/ID across output directories; report-bound wheel installs offline as version 0.1.0; source revision/version/test-material matches; report is absent from truth registry and both distribution payloads; Skill remains 118 lines
 - Remaining issues: run the full repository and common gates, create the immutable implementation commit, then generate a real local report for that exact commit using actual 407-or-later totals and raw outputs before RW-201/PLAN-0002 closure
 - Next safe action: run full regression and common gates, commit RW-201, rebuild exact-anchor artifacts, record actual acceptance outputs, create/verify the content-addressed report, then append both CLOSE records
+
+---
+
+## 2026-08-19 · DEV-0014 · RW-201 · CLOSE
+
+- Status: complete
+- Baseline: `55b92fa7f6abab0cbecdf5ae20b93c8feba0ee01`
+- Anchor: `be9c676bc1e30c18647a0c07fbfd8b209398ffae`
+- Supersedes: none
+- Scope: delivered deterministic content-addressed local release evidence generation and independent verification, strict five-check/raw-output binding, checkout script, artifact/install readback, operations procedure, and stable Skill routing
+- Non-goals: unchanged; no upload, tag, remote release, signature, notarization, credential use, generated truth, runtime state expansion, or publication authority was introduced
+- Risk: standard; accepted only after generating and independently verifying a real report for the exact immutable anchor and installing its bound wheel offline
+- Dependencies: DEV-0014 START, complete red baseline, implementation-complete UPDATE, RW-101 through RW-103 evidence, and all exact-anchor gates satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 18 focused tests, complete 407-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, real artifact build/install, five raw-output descriptors, independent report verification, planning append-only history, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 18 RW-201 tests and all 407 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional gate passed
+- Tests: real check bundle recorded repository 407/407, external journeys 19/19, upgrade recovery 19/19, Skill validation 1/1, and dogfood validation 3/3, each with zero failed, skipped, or unknown and a live raw-output SHA-256
+- Readback: wheel 57,730 bytes SHA-256 `77e42f3a8f81cf4e6d42e14b318543d171faff7fcf4204a4a6a9fc112dbf5fcf`; source 266,349 bytes SHA-256 `e7ce9ea74b38f876a8d52623c66b28181ad78a49ea26b93b252f8e33377592c6`; offline console/module both report `voyage 0.1.0`
+- Release evidence: local report `/tmp/voyage-rw201-anchor-be9c676.o2QdGg/release/voyage-release-35d0e5793ea777543ce0d6db51c0e50a085ed726ca87fca437452c12ca9dae23.json` independently verifies as `sha256:35d0e5793ea777543ce0d6db51c0e50a085ed726ca87fca437452c12ca9dae23`; it is disposable evidence and is not committed or registered as truth
+- Remaining issues: none inside RW-201; external publication and branch integration remain outside this evidence generator and require explicit User action/authorization
+- Next safe action: append PLAN-0002 CLOSE, commit and push both closure records, verify the remote branch head contains every immutable work anchor, then stop at the User-controlled review/integration/publication boundary
+
+---
+
+## 2026-08-19 · PLAN-0002 · CLOSE
+
+- Status: complete
+- Baseline: `1bba25b6a4b5b309c82ed1a0c59e6f996f0c9a92`
+- Delivery branch: `xp/plan-real-world-hardening`
+- Immutable work anchors: RW-000 `533cb7b1526b2868423bb1f58f0a6cb87773fa61`; RW-101 `9e147a08d4d4b0c20ac14595ee61867da1122a7e`; RW-102 `b794303b32b8be9643925548b75dd8d300bfb685`; RW-103 `8d770fa3382d6129e685b4c9d21ed14dc8ecd34a`; RW-201 `be9c676bc1e30c18647a0c07fbfd8b209398ffae`
+- Objective result: PASS; VoyageSkill is buildable, reproducibly packaged, offline installable, externally invocable, adoptable, explicitly migratable, cold-recoverable, failure-atomic, and locally release-evidence-verifiable without conversation memory, repository-local imports, fabricated evidence, or permanent-kernel expansion
+- Delivered surfaces: source-checkout Skill/scripts and zero-third-party-runtime-dependency Python wheel; both retain version 0.1.0 and the same installed CLI contract
+- Real-world journeys: fresh bootstrap through activation and closed work, custom-registry adoption without overwrite, real typed Git/command/runtime/resource evidence, self-review/decision/anchor/conflict rejection, and persisted identity across unrelated processes
+- Compatibility and recovery: two per-byte historical fixtures, explicit User migration, unknown/damaged fail-closed behavior, init resumption, expired lease and evidence classification, unsupported writer refusal, and complete negative-tree non-mutation
+- Local release evidence: manifest `sha256:35d0e5793ea777543ce0d6db51c0e50a085ed726ca87fca437452c12ca9dae23` binds RW-201 commit, artifact bytes, interpreter/platform, 407 repository tests, 19 external journeys, 19 upgrade/recovery tests, Skill validation, and dogfood validation
+- Unified gate result: PASS; 407 passed, 0 failed, 0 errors, 0 skipped; compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, artifact reproducibility/content inspection, offline install/version readback, fixture SHA catalog, planning append-only history, source-tree cleanliness, and diff hygiene all passed
+- Kernel constraint: no new permanent graph node/edge, event type, mandatory gate, background service, provider, snapshot, database, extension enablement, Windows writer, or expanded trust boundary was added
+- Publication boundary: no package upload, remote tag/release, signature, notarization, branch deletion, or credentialed external mutation was performed; the local report does not authorize any of them
+- Remaining issues: none within PLAN-0002; merge/review and any external publication are separate User-controlled actions
+- Next safe action: commit and push this append-only closure, verify remote branch parity, then present the immutable anchors and local evidence ID for User review without performing publication or branch deletion
