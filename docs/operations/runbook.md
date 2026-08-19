@@ -129,6 +129,21 @@ Stop after local verification. Uploading, tagging, signing, or creating any
 remote release requires separate scoped User authorization; PLAN-0002 does not
 grant publication authority.
 
+For a local candidate, retain raw output descriptors for exactly
+`repository-tests`, `skill-validation`, `dogfood-validation`,
+`external-journeys`, and `upgrade-recovery`; every count must be passed with
+zero failed, skipped, or unknown. Create and independently verify the disposable
+content-addressed report:
+
+```bash
+python3 scripts/voyage-release.py create --source . --artifacts <artifact-dir> --checks <checks.json> --output <new-external-dir> --revision <full-commit>
+python3 scripts/voyage-release.py verify --source . --artifacts <artifact-dir> --checks <checks.json> --manifest <release-evidence.json>
+```
+
+The report is local evidence only. Deleting and rebuilding it from immutable
+inputs must restore the same ID. Stop after verification; any external
+publication still requires separate User authorization.
+
 ## Bootstrap and truth activation
 
 `voyage init` creates a `bootstrap` project. Generated product, governance,

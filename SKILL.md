@@ -104,6 +104,10 @@ mutually untrusted writers, stop and resolve the active governance and system tr
 before using an external authenticated writer.
 <!-- trust-loading:end -->
 
+For a release evidence task, resolve the active operations truth and follow its
+local candidate procedure. Treat its report as disposable evidence, and stop
+before external publication unless an exact User authorization exists.
+
 - Resolve the truth registry from the managed project's manifest.
 - Resolve the one active, activation-verified source for each required domain:
   `product`, `governance`, `system`, and `operations`.

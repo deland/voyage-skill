@@ -2602,3 +2602,41 @@ active → retired | superseded
 3. 实现 ST-2012 independent verifier 与所有单点 tamper cases，不自动修复输入。
 4. 添加 checkout-only local release script，收敛 ST-2013 operations/Skill；再用真实 wheel/source/install 通过 ST-2014。
 5. 完整回归后创建不可变实现提交，生成该精确 commit 的本地 release evidence、独立复验、追加 CLOSE 和 PLAN-0002 CLOSE、推送并读回远端；停在 User-controlled publication boundary。
+
+---
+
+## 2026-08-19 · DEV-0014 · RW-201 · UPDATE
+
+- Status: in-progress; complete release-evidence red baseline captured
+- Baseline: `55b92fa7f6abab0cbecdf5ae20b93c8feba0ee01`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 18 canonical manifest, independent verification, tamper, script, documentation, artifact installation, distribution isolation, and publication-surface tests were added before release implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0014 START; real exact-commit artifacts and five raw-output check descriptors were built outside the repository before assertions
+- Acceptance gates: failures must map to absent release module/script or missing active routing/operations contract; the one vacuous negative pass caused by module import failure is not evidence of implemented rejection
+- Actual result: expected FAIL; 18 methods ran with 4 assertion failures and 15 errors including artifact subtests; one negative aggregate method returned expected exception only because the module was absent
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_release_evidence -v`
+- Readback: `voyage_skill.release` and `scripts/voyage-release.py` are absent; runbook lacks five-check candidate commands; Skill has no progressive release-task routing; all real wheel/source/check inputs were created successfully by prior contracts
+- Remaining issues: implement canonical generator and strict five-check ingestion first, rerun ST-2011 and the negative aggregate to replace vacuous import errors with semantic failures, then add verifier and script
+- Next safe action: implement only `create_release_evidence` with exact commit/artifact/source-manifest/check validation and source-tree output guard, then run ST-2011 before verifier or documentation changes
+
+---
+
+## 2026-08-19 · DEV-0014 · RW-201 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `55b92fa7f6abab0cbecdf5ae20b93c8feba0ee01`
+- Anchor: pending
+- Supersedes: none
+- Scope: deterministic local release evidence generator/verifier, checkout script, exact five-check contract, artifact/source/interpreter binding, tamper rejection, active operations procedure, and stable Skill routing are implemented
+- Non-goals: unchanged; the tool has only create/verify, performs no upload/tag/sign/notarize/remote release, adds no project state or truth, and grants no publication authority
+- Risk: standard; generation validates every immutable input before creating the output directory, verification independently recomputes all bytes and fields, and the report remains disposable
+- Dependencies: complete red baseline, ST-2011 through ST-2014 focused rerun 18/18, real wheel offline installation and source contract readback satisfied
+- Acceptance gates: complete 407-test-or-later regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, exact-anchor artifact/check/report generation and independent verification, clean source tree, planning append-only history, and diff hygiene
+- Actual result: PASS before commit for focused scope; 18/18 passed with 0 failures, 0 errors, and 0 skips
+- Tests: all five check IDs require exit 0, positive total, passed equal total, zero failed/skipped/unknown, and live raw-output digest/size; artifact and manifest mutation cases fail deterministically without repair
+- Readback: identical inputs create byte-identical report/ID across output directories; report-bound wheel installs offline as version 0.1.0; source revision/version/test-material matches; report is absent from truth registry and both distribution payloads; Skill remains 118 lines
+- Remaining issues: run the full repository and common gates, create the immutable implementation commit, then generate a real local report for that exact commit using actual 407-or-later totals and raw outputs before RW-201/PLAN-0002 closure
+- Next safe action: run full regression and common gates, commit RW-201, rebuild exact-anchor artifacts, record actual acceptance outputs, create/verify the content-addressed report, then append both CLOSE records
