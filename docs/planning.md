@@ -2373,3 +2373,41 @@ active → retired | superseded
 3. 再收敛 ST-1022 real commit/evidence/resource/lifecycle，并逐项运行安装后 focused tests。
 4. 收敛 ST-1023 custom-registry adoption 与 no-overwrite，随后验证 ST-1024 的每个失败前后摘要。
 5. 更新 active operations/CLI reference only where runtime behavior requires it；完整回归后创建不可变实现提交，精确复验、追加 CLOSE、推送并读回远端。
+
+---
+
+## 2026-08-19 · DEV-0012 · RW-102 · UPDATE
+
+- Status: in-progress; complete external-journey red baseline captured
+- Baseline: `07dafa3b09c02380311b400a23e7050e3412b795`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 19 installed-process tests and the external-only Git/wheel/venv harness were added before product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0012 START and corrected test-helper naming collision; the initial `unittest.TestCase.run` override was rejected as a harness error and is not counted as product red
+- Acceptance gates: failures must map to persisted recovery identity or structured quality readback rather than source imports, fixture shortcuts, invalid evidence, or test infrastructure
+- Actual result: expected FAIL; 19 tests ran with 16 passes, 0 assertion failures, and 3 errors
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_external_journeys -v`
+- Readback: both fresh and adopted cold recovery omit persisted `project_id` and custom `truth_registry`; full state records the quality transition but exposes no stable structured `work.quality` readback; all other bootstrap, activation, typed evidence, resource, lifecycle, adoption, self-review, decision-scope, bad-anchor, conflict, and zero-partial-write checks pass from the installed console
+- Remaining issues: add distribution-neutral persisted identity to recovery and converge independent-quality state readback without changing event/schema/kernel contracts; then rerun ST-1021/ST-1023 and ST-1022 respectively
+- Next safe action: implement only recovery project identity and registry path, run the two recovery failures plus all ST-1021/ST-1023 tests, then add structured quality readback and rerun ST-1022/ST-1024
+
+---
+
+## 2026-08-19 · DEV-0012 · RW-102 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `07dafa3b09c02380311b400a23e7050e3412b795`
+- Anchor: pending
+- Supersedes: none
+- Scope: installed-process fresh/adopted journeys are complete; truth and recovery now identify the persisted project/registry/head, and full derived work state retains the independent-quality result separately from the effective gate readback
+- Non-goals: unchanged; no new event, schema, graph type, persistent state, extension, dependency, publication action, or trust-boundary claim was introduced
+- Risk: standard; new fields are read-only projections of manifest and ledger data, while every negative journey compares ledger/control bytes before and after rejection
+- Dependencies: complete 16-pass/3-error red baseline; ST-1021 through ST-1024 focused rerun 19/19; active system and operations readback contracts converged
+- Acceptance gates: complete 370-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, external wheel process boundary, source-tree cleanliness, planning append-only history, and diff hygiene
+- Actual result: PASS before commit; focused 19/19 and full 370/370 passed with 0 failures, 0 errors, and 0 skips
+- Tests: two journeys use a locally built wheel installed with `--no-index --no-deps`; every Voyage command runs as a separate sanitized subprocess from a new unrelated cwd; no journey test imports the product core or reuses the dogfood ledger
+- Readback: fresh and adopted projects retain exact IDs and registry paths across cold processes; real full Git commits, command outputs, runtime reads, and resource probes verify as typed evidence; executor self-review, wrong User scope, invalid commit, bootstrap authorization, and conflicting lease each return exit 2 without advancing the ledger
+- Remaining issues: create the immutable implementation commit, rebuild/install its exact wheel, rerun all 19 focused and 370 full tests plus common gates, then append CLOSE; historical upgrade and interrupted-state matrices remain RW-103
+- Next safe action: run all non-test acceptance gates, commit RW-102, verify the exact commit through the installed wheel and full suite, then append CLOSE

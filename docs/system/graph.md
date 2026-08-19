@@ -136,6 +136,12 @@ idempotently and records exactly one `project.initialized` event. Different
 arguments fail without mutation. Successful initialization removes the marker;
 an adopted truth registry is validated but never rewritten or deleted.
 
+Cold truth and recovery views identify the project from the persisted manifest,
+including `project_id`, project-relative `truth_registry`, and the replayed
+`ledger_head`. Full derived work state retains a structured independent-quality
+result bound to its delivery anchor; a later gate readback does not erase that
+quality actor, evidence, count, or event provenance.
+
 Every edge names its endpoints, preconditions, creating permission, required
 evidence, invalidation conditions, and failure transition.
 

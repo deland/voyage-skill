@@ -149,6 +149,12 @@ voyage --root <project> truth list
 voyage --root <project> truth status
 ```
 
+Both `truth status` and `recover` read the persisted project ID, truth-registry
+path, and current ledger head; use those fields to confirm that a new process
+has reopened the intended project. `status --full` retains the independent
+quality verdict, actor, exact delivery anchor, typed evidence IDs, complete
+counts, and source event alongside the effective mandatory-gate result.
+
 Record a User-loop `decision.recorded` event whose payload scope contains the
 project ID, action `truth.activate`, and exact source IDs. Then activate each
 source through governance:
