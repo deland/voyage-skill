@@ -2411,3 +2411,22 @@ active → retired | superseded
 - Readback: fresh and adopted projects retain exact IDs and registry paths across cold processes; real full Git commits, command outputs, runtime reads, and resource probes verify as typed evidence; executor self-review, wrong User scope, invalid commit, bootstrap authorization, and conflicting lease each return exit 2 without advancing the ledger
 - Remaining issues: create the immutable implementation commit, rebuild/install its exact wheel, rerun all 19 focused and 370 full tests plus common gates, then append CLOSE; historical upgrade and interrupted-state matrices remain RW-103
 - Next safe action: run all non-test acceptance gates, commit RW-102, verify the exact commit through the installed wheel and full suite, then append CLOSE
+
+---
+
+## 2026-08-19 · DEV-0012 · RW-102 · CLOSE
+
+- Status: complete
+- Baseline: `07dafa3b09c02380311b400a23e7050e3412b795`
+- Anchor: `b794303b32b8be9643925548b75dd8d300bfb685`
+- Supersedes: none
+- Scope: delivered installed-process fresh and adopted project journeys, real Git/command/runtime/resource evidence, closed work recovery, exact persisted identity readback, structured independent-quality state, and atomic rejection coverage
+- Non-goals: unchanged; no publication, deployment, extension, new durable state, graph expansion, dependency, remote action, or trust-boundary expansion was introduced
+- Risk: standard; accepted only after rebuilding and installing the exact anchor wheel and rerunning every journey from disposable external Git projects
+- Dependencies: DEV-0012 START, complete 16-pass/3-error red baseline, implementation-complete UPDATE, and all exact-anchor gates satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 19 installed-process focused tests, complete 370-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, planning append-only history, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 19 RW-102 tests and all 370 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional acceptance gate passed
+- Tests: fresh and custom-registry adoption each ran through an offline-installed wheel with sanitized environment, no source cwd/PYTHONPATH, independent processes and persisted-only handoff; five negative boundaries returned deterministic rejection with byte-identical ledger/control inputs
+- Readback: fresh/adopted recover reports exact project ID, project-relative registry and replayed head; delivery/quality/gate share one real full Git commit evidence ID; released resources have no active lease; closed work reports next action `none`; source tree contains no journey artifact or environment
+- Remaining issues: RW-103 must now bind supported historical fixture versions and exercise interruption, damaged-tail/evidence, expired lease, unsupported lock and initialization-marker recovery without silently rewriting any project state
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-102 anchor, then start RW-103 with its complete test matrix before creating historical fixtures or upgrade behavior
