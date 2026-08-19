@@ -2526,3 +2526,22 @@ active → retired | superseded
 - Readback: catalog contains two sorted entries and 12 SHA-256-bound files each; source archive labels `tests/fixtures/history/` as test material while wheel excludes it; three independent recover processes agree on identity, stage, head and next actions
 - Remaining issues: run the full repository and common gates, create the immutable implementation commit, rebuild/install that exact commit and rerun all 19/389-or-later tests before CLOSE; local release evidence remains RW-201
 - Next safe action: run full regression and common gates, commit RW-103, verify the exact anchor through rebuilt artifacts and fixture digests, then append CLOSE
+
+---
+
+## 2026-08-19 · DEV-0013 · RW-103 · CLOSE
+
+- Status: complete
+- Baseline: `33e3432f3de60a9498681fbf9f4bf4bd3f1da520`
+- Anchor: `8d770fa3382d6129e685b4c9d21ed14dc8ecd34a`
+- Supersedes: none
+- Scope: delivered byte-bound v0.1 legacy/explicit fixtures, installed-reader compatibility and migration proof, unknown/damaged fail-closed behavior, init/cross-session recovery, expired lease/evidence/lock atomicity, and active compatibility operations
+- Non-goals: unchanged; no automatic upgrade or repair, snapshot/database, Windows writer, inferred authority, runtime graph expansion, trust-boundary expansion, or external publication was introduced
+- Risk: standard; accepted only after exact-anchor artifact installation, complete fixture digest verification, and negative full-tree mutation checks
+- Dependencies: DEV-0013 START, complete 5-pass/2-failure/14-error red baseline, corrected legacy/no-invention assertion and full-chain fault injection, implementation-complete UPDATE, and all exact-anchor gates satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 19 focused tests, complete 389-test regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, fixture catalog readback, artifact content boundary, planning append-only history, and commit diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 19 RW-103 tests and all 389 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional gate passed
+- Tests: legacy migration preserves the pre-migration ledger as a byte prefix and requires exact User scope; explicit fixture remains operational without migration; future schema/evidence, damaged payload/tail, consumed evidence loss, init mismatch and unsupported writer all fail without authoritative-tree mutation
+- Readback: two catalog entries each bind 12 sorted files; legacy recovery reports four unverified active sources rather than inventing activation evidence; three cold sessions agree on identity/stage/head/actions; source manifest labels fixtures test-only and wheel excludes them
+- Remaining issues: RW-201 must generate and independently verify a local, content-addressed release evidence manifest that binds the exact commit, rebuilt artifacts, interpreter, complete test totals, Skill/dogfood results and both external journey suites while stopping before publication
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-103 anchor, then start RW-201 with its complete test matrix before adding release evidence code
