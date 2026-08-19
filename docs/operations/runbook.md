@@ -181,6 +181,21 @@ Migration appends confirmation evidence and adds the operational stage; it does
 not rewrite earlier ledger events. Do not use migration to bypass a new
 bootstrap project's per-source activation.
 
+## Historical fixture and upgrade readback
+
+Treat `tests/fixtures/history/catalog.json` as test-only historical fixture
+evidence. Verify its per-file SHA-256 values, then run `validate`, `truth
+status`, and `recover` from the candidate installed CLI. A read-compatible
+explicit fixture requires no migration. A user-migratable legacy fixture must
+remain `legacy-bootstrap` until the User records an exact `truth.migrate`
+decision and governance runs the command above.
+
+After migration, prove that the new ledger is an append-only prefix extension
+of the pre-migration ledger. Stop on damaged input, digest drift, an
+`unknown-future` schema/evidence version, an initialization argument mismatch,
+or unsupported writer capability. Do not repair, normalize, activate truth,
+promote evidence, enable extensions, or reduce risk as part of readback.
+
 ## Extension operations
 
 <!-- extension-operations:start -->

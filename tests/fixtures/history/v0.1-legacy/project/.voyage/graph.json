@@ -1,0 +1,45 @@
+{
+  "edge_types": [
+    "governs",
+    "depends-on",
+    "authorized-by",
+    "bound-to-loop",
+    "assigned-to",
+    "delivered-via",
+    "claims",
+    "releases",
+    "produces",
+    "anchored-at",
+    "validated-by",
+    "rejects",
+    "blocks",
+    "unblocks",
+    "supersedes",
+    "retires",
+    "escalates-to"
+  ],
+  "loops": [
+    "audit",
+    "execution",
+    "governance",
+    "quality"
+  ],
+  "node_types": [
+    "project",
+    "principal",
+    "loop-binding",
+    "truth-source",
+    "decision",
+    "work-item",
+    "delivery",
+    "immutable-anchor",
+    "evidence",
+    "gate",
+    "resource",
+    "lease",
+    "rule",
+    "block",
+    "external-anchor"
+  ],
+  "schema_version": "0.1.0"
+}

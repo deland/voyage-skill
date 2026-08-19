@@ -172,7 +172,13 @@ def _build_source(repository: Path, commit: str, version: str, destination: Path
                 info.size = len(content)
                 archive.addfile(info, io.BytesIO(content))
         manifest = json.dumps(
-            {"schema_version": 1, "project": "voyage-skill", "version": version, "revision": commit},
+            {
+                "schema_version": 1,
+                "project": "voyage-skill",
+                "version": version,
+                "revision": commit,
+                "test_material": ["tests/fixtures/history/"],
+            },
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),

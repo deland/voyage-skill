@@ -1,0 +1,43 @@
+{
+  "non_authoritative": [
+    "docs/research/",
+    "conversation memory",
+    "worker summaries"
+  ],
+  "project": "explicit-fixture",
+  "schema_version": "0.1.0",
+  "sources": [
+    {
+      "authority": "user-decision:USER-BOOTSTRAP",
+      "domain": "product",
+      "id": "product",
+      "path": "docs/voyage/product.md",
+      "status": "active",
+      "version": "1"
+    },
+    {
+      "authority": "user-decision:USER-BOOTSTRAP",
+      "domain": "governance",
+      "id": "governance",
+      "path": "docs/voyage/governance.md",
+      "status": "active",
+      "version": "1"
+    },
+    {
+      "authority": "user-decision:USER-BOOTSTRAP",
+      "domain": "system",
+      "id": "system",
+      "path": "docs/voyage/system.md",
+      "status": "active",
+      "version": "1"
+    },
+    {
+      "authority": "user-decision:USER-BOOTSTRAP",
+      "domain": "operations",
+      "id": "operations",
+      "path": "docs/voyage/operations.md",
+      "status": "active",
+      "version": "1"
+    }
+  ]
+}

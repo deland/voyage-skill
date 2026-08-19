@@ -2488,3 +2488,41 @@ active → retired | superseded
 3. 收敛 unknown-version/init-resume/cross-process 行为并通过 ST-1032，不增加隐式迁移。
 4. 收敛 ST-1033 损坏、过期租约和 lock capability 的确定性读回；每项比较完整树摘要。
 5. 更新 active system/operations compatibility policy 并通过 ST-1034；完整回归后创建不可变实现提交，精确复验、追加 CLOSE、推送并读回远端。
+
+---
+
+## 2026-08-19 · DEV-0013 · RW-103 · UPDATE
+
+- Status: in-progress; complete compatibility red baseline captured
+- Baseline: `33e3432f3de60a9498681fbf9f4bf4bd3f1da520`
+- Anchor: pending
+- Supersedes: none
+- Scope: all 19 historical-reader, interruption, damage, lease, lock, atomicity, policy, and distribution-boundary tests were added before fixture or product implementation
+- Non-goals: unchanged
+- Risk: standard
+- Dependencies: DEV-0013 START; test harness successfully built/installed the current wheel and isolated all generated work outside the repository
+- Acceptance gates: failures must map to absent fixture/catalog/test-material metadata or active compatibility policy; existing safety behavior should remain green
+- Actual result: expected FAIL; 19 methods ran with 5 passes, 2 assertion failures, and 14 errors including three aggregate negative subtests
+- Tests: `PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/voyage-plan2-pycache python3 -B -m unittest tests.test_upgrade_recovery -v`
+- Readback: init marker resume/mismatch, tampered-or-missing consumed evidence, expired stateful lease scoping, and unsupported lock write refusal already pass; errors are missing `tests/fixtures/history` catalog/projects; assertions expose missing system/runbook compatibility markers and source `test_material` metadata
+- Remaining issues: create and independently inspect the minimal legacy/explicit fixtures, bind every byte in canonical catalog order, then run ST-1031 before changing documentation or source archive metadata
+- Next safe action: generate candidate fixtures outside the source tree, review their exact files/events, add them and their computed catalog through an explicit patch, then run only the five ST-1031 tests
+
+---
+
+## 2026-08-19 · DEV-0013 · RW-103 · UPDATE
+
+- Status: implementation complete; immutable anchor pending
+- Baseline: `33e3432f3de60a9498681fbf9f4bf4bd3f1da520`
+- Anchor: pending
+- Supersedes: none
+- Scope: canonical legacy/explicit v0.1 fixture catalog, installed-reader migration/readback, unknown/damaged fail-closed matrices, interruption and cross-process recovery, evidence/lease/lock failure atomicity, source test-material metadata, and active compatibility operations are implemented
+- Non-goals: unchanged; no automatic unknown upgrade, repair, snapshot, Windows writer, truth activation, evidence promotion, extension enablement, risk relaxation, persistent runtime type, or publication action was added
+- Risk: standard; every historical byte is SHA-256 bound, migration still requires an exact User decision, and all negative commands prove complete authoritative-tree non-mutation
+- Dependencies: complete 5-pass/2-failure/14-error red baseline, corrected legacy activation expectation and full-chain fault injection, ST-1031 through ST-1034 focused rerun 19/19
+- Acceptance gates: complete 389-test-or-later regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validator, fixture catalog readback, installed wheel historical reader, source/wheel content boundary, clean source tree, planning append-only history, and diff hygiene
+- Actual result: PASS before commit for focused scope; 19/19 passed with 0 failures, 0 errors, and 0 skips
+- Tests: supported legacy remains legacy-bootstrap with four explicitly unverified active sources until exact User migration; current explicit reads operational; future/damaged/tampered/truncated/mismatched/unsupported cases stop without changing authoritative bytes
+- Readback: catalog contains two sorted entries and 12 SHA-256-bound files each; source archive labels `tests/fixtures/history/` as test material while wheel excludes it; three independent recover processes agree on identity, stage, head and next actions
+- Remaining issues: run the full repository and common gates, create the immutable implementation commit, rebuild/install that exact commit and rerun all 19/389-or-later tests before CLOSE; local release evidence remains RW-201
+- Next safe action: run full regression and common gates, commit RW-103, verify the exact anchor through rebuilt artifacts and fixture digests, then append CLOSE
