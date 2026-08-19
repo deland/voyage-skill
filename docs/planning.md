@@ -2296,3 +2296,22 @@ active → retired | superseded
 - Readback: wheel contains only runtime Python, license and dist-info metadata with no Requires-Dist; source archive carries a versioned commit manifest; build/install produces no repository artifact; the original clean-source pip failure remains correctly classified as missing build tooling rather than a runtime dependency
 - Remaining issues: create the immutable commit and use its exact SHA to run the builder from the checkout, compare two artifact builds, install one wheel, and rerun all gates before CLOSE
 - Next safe action: commit RW-101, build and install exact-anchor artifacts outside the source tree, rerun 14 focused and 351 full tests, then append CLOSE
+
+---
+
+## 2026-08-19 · DEV-0011 · RW-101 · CLOSE
+
+- Status: complete
+- Baseline: `82c259b11cb8bccdb2b284275662365c4d541962`
+- Anchor: `9e147a08d4d4b0c20ac14595ee61867da1122a7e`
+- Supersedes: none
+- Scope: delivered deterministic commit-bound wheel and source artifacts, strict artifact inspection, common version readback, offline clean-venv installation, installed/source entry-point parity, and the local candidate build/install/verify operations contract
+- Non-goals: unchanged; no package upload, remote tag/release, signature, external project full lifecycle, historical migration fixture, optional extension, or runtime state-machine change was introduced
+- Risk: standard; the exact anchor reads a named commit, writes only outside the source tree, verifies artifact contents and digests, and leaves publication under explicit User authority
+- Dependencies: DEV-0011 START, complete 0-pass red baseline, implementation-complete UPDATE, and exact-anchor artifact/readback verification satisfied
+- Acceptance gates: exact anchor identity, clean pre-CLOSE worktree, 14 focused tests, complete 351-test regression, compileall, dogfood validate, CLI reference, official Skill validator, two independent artifact builds, offline wheel installation, installed entry-point readback, source-tree cleanliness, and diff hygiene
+- Actual result: PASS; HEAD exactly matched the anchor before this CLOSE append; all 14 RW-101 tests and all 351 repository tests passed with 0 failures, 0 errors, and 0 skips; every additional acceptance gate passed
+- Tests: exact-anchor wheel installed with `pip install --no-index --no-deps` into `/tmp/voyage-rw101-venv-9e147a0`; installed `voyage --version` and `python -m voyage_skill --version` both returned `voyage 0.1.0`; installed `--help` succeeded from an unrelated working directory
+- Readback: builds in `/tmp/voyage-rw101-anchor-a-9e147a0` and `/tmp/voyage-rw101-anchor-b-9e147a0` were byte-identical; wheel size 54,099 bytes and SHA-256 `90477c11ec2c35882cffc416d1eef982b717c7a21b39ed85a49fbd0a0b8b81fd`; source archive size 235,566 bytes and SHA-256 `8a01801ab356194032e043f61e92f552662c158294477c826c3f36e16bc98542`; no artifact or environment was created in the source tree
+- Remaining issues: artifact construction and installation are proven, but RW-102 must prove the installed product through complete fresh-project and adopted-project black-box journeys using real immutable evidence and failure boundaries
+- Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-101 anchor, then start RW-102 with its complete test matrix before changing journey behavior
