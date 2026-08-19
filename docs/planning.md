@@ -2430,3 +2430,61 @@ active → retired | superseded
 - Readback: fresh/adopted recover reports exact project ID, project-relative registry and replayed head; delivery/quality/gate share one real full Git commit evidence ID; released resources have no active lease; closed work reports next action `none`; source tree contains no journey artifact or environment
 - Remaining issues: RW-103 must now bind supported historical fixture versions and exercise interruption, damaged-tail/evidence, expired lease, unsupported lock and initialization-marker recovery without silently rewriting any project state
 - Next safe action: commit and push this append-only CLOSE record, verify the remote branch head contains the RW-102 anchor, then start RW-103 with its complete test matrix before creating historical fixtures or upgrade behavior
+
+---
+
+## 2026-08-19 · DEV-0013 · RW-103 · START
+
+- Status: in-progress; test design complete, implementation not started
+- Baseline: `7fcb641b058ca71b8dae20761efcd6fe6cb54a95`
+- Anchor: pending
+- Supersedes: none
+- Scope: bind supported historical project layouts to human-auditable fixture manifests and digests; prove installed-reader migration, cross-process recovery, interrupted initialization, expired lease, damaged evidence/ledger/control data, unsupported writer capability, and failure atomicity
+- Non-goals: no automatic upgrade of unknown formats, snapshot/database/index, Windows writer, destructive repair, historical truth auto-activation, evidence promotion, extension enablement, risk reduction, new graph type, or claim against a malicious same-account writer
+- Risk: standard; compatibility code that guesses or rewrites history could silently create authority, so every supported transformation must be decision-bound and every unsupported/damaged input must fail before mutation
+- Dependencies: RW-102 installed-process and persisted-identity contract at the remote baseline above
+- Acceptance gates: all tests below are added before fixture/product implementation; each supported fixture has fixed provenance and SHA-256 coverage; every failure compares ledger/control/tree digests; final focused suite, full repository regression, compileall, dogfood validate/truth/recover, CLI reference, official Skill validation, clean source tree, and diff hygiene pass
+- Actual result: pending
+- Tests: 19 methods defined below; not run yet
+- Readback: existing unit tests cover individual legacy/init/damaged-input/platform cases, but the release branch has no immutable historical fixture catalog, installed-reader compatibility suite, aggregate mutation proof, or active compatibility policy
+- Remaining issues: all ST-1031 through ST-1034 work remains
+- Next safe action: add all 19 tests against intentionally absent fixtures/policy, capture the red baseline, then implement ST-1031 only
+
+### ST-1031 · Historical fixture catalog and supported reader boundary
+
+1. `fixture_catalog_is_versioned_and_lists_exact_supported_contracts`：catalog names fixture format, source Voyage version, expected project stage, migration mode, and every included file.
+2. `fixture_catalog_sha256_matches_every_historical_byte`：all listed files exist, have full SHA-256, no unlisted authoritative file exists, and catalog ordering is canonical.
+3. `installed_reader_validates_and_recovers_supported_legacy_fixture`：installed CLI reads the v0.1 legacy fixture as `legacy-bootstrap` without rewriting it or inventing activation evidence.
+4. `legacy_fixture_migration_requires_exact_user_decision_and_appends_only`：missing/wrong decision fails atomically; exact `truth.migrate` User scope appends confirmation and preserves all original ledger bytes as a prefix.
+5. `installed_reader_accepts_explicit_current_fixture_without_migration`：current explicit fixture validates/recoveries operational and rejects legacy migration without mutation.
+
+### ST-1032 · Unknown versions, interruption and cross-session recovery
+
+1. `future_manifest_schema_fails_closed_without_mutation`：unknown manifest schema returns structured invalid status and cannot recover or authorize work.
+2. `future_event_or_evidence_version_fails_closed_without_promotion`：unknown event/evidence version is never replayed, verified, activated, or rewritten.
+3. `started_init_marker_resumes_idempotently_with_one_initial_event`：started-phase marker plus matching arguments completes once; repeated completion cannot duplicate initialization.
+4. `mismatched_init_resume_arguments_leave_partial_tree_unchanged`：marker project/registry mismatch returns exit 2 and leaves every byte unchanged.
+5. `separate_processes_recover_identical_head_stage_and_next_actions`：three sanitized installed processes produce the same durable identity/head/stage/actions apart from explicit validation time.
+
+### ST-1033 · Damaged state, expired resources and atomic failure
+
+1. `truncated_ledger_tail_is_deterministic_json_error_without_traceback`：partial final line yields deterministic CLI error, no Python traceback, and no ledger repair/write.
+2. `hash_valid_but_invalid_event_payload_fails_without_state_mutation`：rehashed unsupported payload still fails schema/replay and is not normalized.
+3. `tampered_or_missing_consumed_evidence_blocks_recovery_without_mutation`：content-address mismatch and missing document each block cold recovery while preserving all bytes.
+4. `expired_stateful_lease_is_unknown_with_minimum_recovery_scope`：expired lease is reported unknown/recovery-required only for its resource/lease and does not auto-release.
+5. `unsupported_lock_backend_blocks_write_before_ledger_mutation`：writer capability unavailable returns the documented next action while read-only validation remains possible and ledger head is unchanged.
+
+### ST-1034 · Compatibility policy, aggregate mutation proof and operations
+
+1. `compatibility_policy_names_supported_migrate_and_reject_classes`：active system truth distinguishes read-compatible, User-migratable, damaged, and unknown-future inputs without claiming auto-repair.
+2. `runbook_documents_fixture_readback_migration_and_no_rewrite_rules`：operations truth provides exact validate/recover/decision/migrate order and stop conditions.
+3. `aggregate_negative_matrix_leaves_authoritative_tree_byte_identical`：all negative fixtures compare a complete tree snapshot before/after commands, not only ledger head.
+4. `historical_fixtures_are_test_only_not_truth_or_distribution_payload`：fixture paths are absent from truth registry and wheel, and source archive identifies them only as test material.
+
+### DEV-0013 执行顺序
+
+1. 添加 fixture catalog/reader/interruption/damage/atomicity 19 项测试，运行并记录预期失败。
+2. 创建最小 hand-auditable legacy/current fixture 与 canonical digest catalog，先通过 ST-1031。
+3. 收敛 unknown-version/init-resume/cross-process 行为并通过 ST-1032，不增加隐式迁移。
+4. 收敛 ST-1033 损坏、过期租约和 lock capability 的确定性读回；每项比较完整树摘要。
+5. 更新 active system/operations compatibility policy 并通过 ST-1034；完整回归后创建不可变实现提交，精确复验、追加 CLOSE、推送并读回远端。
